@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A chat bubble with swipe arrows: the app's swipe-to-act idea. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- bubble -->
+    <path
+        android:fillColor="#FF5B8CFF"
+        android:pathData="M36,32h36a8,8 0,0 1,8 8v22a8,8 0,0 1,-8 8h-18l-10,9v-9h-8a8,8 0,0 1,-8 -8v-22a8,8 0,0 1,8 -8z" />
+
+    <!-- left arrow -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M41,51l8,-7v4.5h7v5h-7v4.5z" />
+
+    <!-- right arrow -->
+    <path
+        android:fillColor="#FFFF8A3D"
+        android:pathData="M67,51l-8,-7v4.5h-6v5h6v4.5z" />
+</vector>

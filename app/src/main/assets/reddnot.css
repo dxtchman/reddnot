@@ -1,0 +1,106 @@
+/*
+ * Reddnot look. Injected into every reddit.com page.
+ * Reddit's site changes often; if something looks off after an update, this is the file to patch.
+ * Theme switches are classes on <html>: rn-black, rn-noheader, rn-noads.
+ */
+
+/* True black. Reddit's colors are CSS variables, which also reach inside its shadow DOM. */
+html.rn-black {
+  --color-neutral-background: #000 !important;
+  --color-neutral-background-weak: #0c0c0e !important;
+  --color-neutral-background-medium: #141417 !important;
+  --color-neutral-background-strong: #1c1c20 !important;
+  --color-neutral-background-container: #000 !important;
+  --color-neutral-background-container-strong: #111114 !important;
+  --color-neutral-background-hover: #16161a !important;
+  --color-neutral-border-weak: #1f1f24 !important;
+  --shreddit-content-background: #000 !important;
+  --color-tone-7: #1f1f24 !important;
+  --color-tone-8: #111114 !important;
+  --color-background: #000 !important;
+  --rn-bg: #000;
+}
+html.rn-black,
+html.rn-black body,
+html.rn-black shreddit-app,
+html.rn-black #main-content,
+html.rn-black .main-container {
+  background: #000 !important;
+}
+
+/* Thin dividers between posts, like a native list */
+html.rn-black shreddit-feed hr,
+html.rn-black main hr {
+  border-color: #1c1c20 !important;
+}
+
+/* Reddit's own header (the app has its own top bar) */
+html.rn-noheader reddit-header-large,
+html.rn-noheader reddit-header-small,
+html.rn-noheader header.v2,
+html.rn-noheader shreddit-app > header {
+  display: none !important;
+}
+
+/* Promoted posts and ads */
+html.rn-noads shreddit-ad-post,
+html.rn-noads shreddit-comments-page-ad,
+html.rn-noads shreddit-sidebar-ad,
+html.rn-noads shreddit-dynamic-ad-link,
+html.rn-noads shreddit-post[promoted],
+html.rn-noads [data-testid="promoted-post"],
+html.rn-noads [data-rn-ad] {
+  display: none !important;
+}
+
+/* "Open in the app" nags */
+xpromo-app-selector,
+#xpromo-bottom-sheet,
+.xpromo-bottom-sheet,
+shreddit-async-loader[bundlename*="xpromo_app_selector"],
+shreddit-async-loader[bundlename*="bottom_sheet_xpromo"],
+faceplate-banner[data-xpromo],
+shreddit-experience-tree {
+  display: none !important;
+}
+
+/* Posts you hid with a swipe */
+[data-rn-hidden] {
+  display: none !important;
+}
+
+/* Bookmarked posts and comments get a green edge */
+shreddit-post[data-rn-saved],
+shreddit-comment[data-rn-saved] {
+  box-shadow: inset 3px 0 0 #34c759 !important;
+}
+
+/* Swipe feedback strip, drawn in the space a swiped item uncovers */
+#rn-strip {
+  position: fixed;
+  z-index: 2147483000;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  transition: background-color 120ms ease;
+  color: #fff;
+  font: 600 14px/1 system-ui, sans-serif;
+}
+#rn-strip.rn-left { justify-content: flex-start; }
+#rn-strip.rn-right { justify-content: flex-end; }
+#rn-strip .rn-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  white-space: nowrap;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+#rn-strip svg { width: 24px; height: 24px; fill: currentColor; }
+
+/* No text selection or tap flashes while swiping */
+html.rn-swiping, html.rn-swiping * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
