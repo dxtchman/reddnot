@@ -635,17 +635,17 @@ private fun MeScreen(store: Store, browser: Browser, open: (String) -> Unit) {
             item { SectionHeader("Look") }
             item {
                 ToggleRow("True black", "Pure black background", store.trueBlack) {
-                    store.setTrueBlack(it); browser.pushState()
+                    store.changeTrueBlack(it); browser.pushState()
                 }
             }
             item {
                 ToggleRow("Hide Reddit's header", "Use the app's top bar instead", store.hideHeader) {
-                    store.setHideHeader(it); browser.pushState()
+                    store.changeHideHeader(it); browser.pushState()
                 }
             }
             item {
                 ToggleRow("Hide promoted posts", null, store.hideAds) {
-                    store.setHideAds(it); browser.pushState()
+                    store.changeHideAds(it); browser.pushState()
                 }
             }
 

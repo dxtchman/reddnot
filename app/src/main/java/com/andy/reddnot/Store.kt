@@ -144,9 +144,9 @@ class Store(context: Context) {
     }
 
     // ---- settings ----
-    fun setTrueBlack(on: Boolean) { trueBlack = on; prefs.edit().putBoolean("trueBlack", on).apply() }
-    fun setHideHeader(on: Boolean) { hideHeader = on; prefs.edit().putBoolean("hideHeader", on).apply() }
-    fun setHideAds(on: Boolean) { hideAds = on; prefs.edit().putBoolean("hideAds", on).apply() }
+    fun changeTrueBlack(on: Boolean) { trueBlack = on; prefs.edit().putBoolean("trueBlack", on).apply() }
+    fun changeHideHeader(on: Boolean) { hideHeader = on; prefs.edit().putBoolean("hideHeader", on).apply() }
+    fun changeHideAds(on: Boolean) { hideAds = on; prefs.edit().putBoolean("hideAds", on).apply() }
 
     fun settingsJson(): JSONObject = JSONObject()
         .put("black", trueBlack)
