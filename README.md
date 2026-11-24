@@ -15,7 +15,7 @@ Other actions you can assign: reply, share, or nothing. You feel a tick as you c
 
 ## What's in it
 
-- **Feed**: a For You · Following · News tab row on the home page (News is a feed of news subreddits you choose in Me). Rainbow comment threads like Apollo. Reddit with your theme, no Reddit header, no promoted posts and no "open in app" nags. Pull to refresh; tap the title to jump to the top. The top bar has sort, search, share and a bookmark button on posts.
+- **Feed**: a For You · Following · News tab row on the home page (News switches between news subreddits you choose in Me). Rainbow comment threads like Apollo. Reddit with your theme, no Reddit header, no promoted posts and no "open in app" nags. Pull to refresh; tap the title to jump to the top. The top bar has sort, search, share and a bookmark button on posts.
 - **Subreddits**: Home, Popular and All, plus your own shortcuts (add from the box, or from ⋮ while viewing a sub). Swipe a shortcut to remove it.
 - **Bookmarks**: posts and comments, saved on the phone and searchable. Swipe left to delete, right to share.
 - **Me**: profile, notifications, messages, log in/out, and customization: background theme (True black, Midnight, Charcoal, Grape, Forest, Reddit dark), accent color, thread-line colors (Rainbow with 4 palettes, Accent, or Reddit's), text size, swipe actions and the News tab's subreddits.

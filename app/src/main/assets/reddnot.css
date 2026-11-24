@@ -9,8 +9,10 @@
  */
 
 /* ---------- background theme ---------- */
-/* Reddit's colors are CSS variables, which also reach inside its shadow DOM. */
-html.rn-theme {
+/* Reddit's colors are CSS variables. Reddit sets some of them again further down the page,
+ * so they're overridden on every element, not just <html>. */
+html.rn-theme,
+html.rn-theme * {
   --color-neutral-background: var(--rn-bg) !important;
   --color-neutral-background-weak: var(--rn-bg2) !important;
   --color-neutral-background-medium: var(--rn-bg3) !important;
@@ -61,6 +63,8 @@ xpromo-app-selector,
 .xpromo-bottom-sheet,
 shreddit-async-loader[bundlename*="xpromo_app_selector"],
 shreddit-async-loader[bundlename*="bottom_sheet_xpromo"],
+shreddit-async-loader[bundlename*="xpromo"]:not([bundlename*="nsfw"]),
+[id*="xpromo"]:not([id*="nsfw"]),
 faceplate-banner[data-xpromo],
 shreddit-experience-tree {
   display: none !important;
@@ -85,25 +89,15 @@ auth-flow-apple-sso,
 }
 
 /* ---------- rainbow threads ----------
- * Each reply gets a colored line down its left edge, colored by depth (like Apollo).
- * The marks are box-shadows set per comment so nested comments don't inherit them. */
-shreddit-comment {
-  --rn-line: 0 0 transparent;
-  --rn-save: 0 0 transparent;
-  box-shadow: var(--rn-line), var(--rn-save) !important;
-}
-html.rn-rainbow { --rn-native-lines: 0; }
-html.rn-rainbow shreddit-comment:not([depth="0"]) { --rn-line: inset 2px 0 0 var(--rn-depth); }
-shreddit-comment[depth="1"], shreddit-comment[depth="9"]  { --rn-depth: var(--rn-t0); }
-shreddit-comment[depth="2"], shreddit-comment[depth="10"] { --rn-depth: var(--rn-t1); }
-shreddit-comment[depth="3"], shreddit-comment[depth="11"] { --rn-depth: var(--rn-t2); }
-shreddit-comment[depth="4"], shreddit-comment[depth="12"] { --rn-depth: var(--rn-t3); }
-shreddit-comment[depth="5"], shreddit-comment[depth="13"] { --rn-depth: var(--rn-t4); }
-shreddit-comment[depth="6"], shreddit-comment[depth="14"] { --rn-depth: var(--rn-t5); }
-shreddit-comment[depth="7"], shreddit-comment[depth="15"] { --rn-depth: var(--rn-t6); }
-shreddit-comment[depth="8"], shreddit-comment[depth="16"] { --rn-depth: var(--rn-t7); }
+ * Done in reddnot.js: it finds Reddit's own thread lines and recolors them by depth. */
 
-/* ---------- bookmarked posts and comments get a green edge on the right ---------- */
+/* Bookmarked comments get a green edge on the right. Set per comment so replies don't inherit it. */
+shreddit-comment {
+  --rn-save: 0 0 transparent;
+  box-shadow: var(--rn-save) !important;
+}
+
+/* ---------- bookmarked posts ---------- */
 shreddit-post[data-rn-saved] {
   box-shadow: inset -3px 0 0 #34c759 !important;
 }

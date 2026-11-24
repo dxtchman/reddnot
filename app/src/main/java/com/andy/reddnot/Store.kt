@@ -62,6 +62,9 @@ class Store(context: Context) {
         private set
     var textZoom by mutableIntStateOf(prefs.getInt("textZoom", 100))
         private set
+    /** Thread line thickness in px; 0 keeps Reddit's. */
+    var threadWidth by mutableIntStateOf(prefs.getInt("threadWidth", 2))
+        private set
     /** Subreddits behind the News tab, joined with "+". */
     var newsSubs by mutableStateOf(prefs.getString("newsSubs", null) ?: DEFAULT_NEWS)
         private set
@@ -168,6 +171,7 @@ class Store(context: Context) {
     fun changeAccent(key: String) { accentKey = key; prefs.edit().putString("accentKey", key).apply() }
     fun changeThreadMode(mode: String) { threadMode = mode; prefs.edit().putString("threadMode", mode).apply() }
     fun changePalette(key: String) { paletteKey = key; prefs.edit().putString("paletteKey", key).apply() }
+    fun changeThreadWidth(px: Int) { threadWidth = px; prefs.edit().putInt("threadWidth", px).apply() }
     fun changeTextZoom(zoom: Int) { textZoom = zoom; prefs.edit().putInt("textZoom", zoom).apply() }
 
     fun changeSwipe(slot: String, action: String) {
@@ -189,12 +193,15 @@ class Store(context: Context) {
         return true
     }
 
-    fun newsUrl() = "https://www.reddit.com/r/$newsSubs/"
+    // Reddit no longer serves combined feeds (r/a+b sends you home), so the News tab
+    // shows one news subreddit at a time with chips to switch between them.
+    fun newsList(): List<String> = newsSubs.split('+').filter { it.isNotBlank() }
+
+    fun newsUrl(sub: String = newsList().firstOrNull() ?: "news") = "https://www.reddit.com/r/$sub/"
 
     fun isNews(url: String): Boolean {
-        val p = Links.path(url).trimEnd('/').lowercase()
-        val base = "/r/${newsSubs.lowercase()}"
-        return p == base || p.startsWith("$base/")
+        val sub = Links.subredditOf(url) ?: return false
+        return newsList().any { it.equals(sub, ignoreCase = true) }
     }
 
     fun threadColors(): List<Long> =
@@ -217,12 +224,13 @@ class Store(context: Context) {
             .put("noHeader", hideHeader)
             .put("noAds", hideAds)
             .put("rainbow", threadMode != "off")
+            .put("threadWidth", threadWidth)
             .put("theme", theme)
             .put("threads", JSONArray(threadColors().map { Themes.hex(it) }))
             .put("swipes", JSONObject().put("post", kind("post")).put("comment", kind("comment")))
     }
 
     companion object {
-        const val DEFAULT_NEWS = "news+worldnews+technology+science"
+        const val DEFAULT_NEWS = "news+worldnews+technology+science+UpliftingNews"
     }
 }

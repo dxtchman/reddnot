@@ -86,12 +86,18 @@
     (document.head || document.documentElement).appendChild(s);
   }
 
-  // Reddit draws its gray thread lines inside each comment's shadow DOM. This hides them
-  // when rainbow threads are on (the variable comes from <html>).
-  var SHADOW_CSS =
-    '[class*="threadline"],[class*="thread-line"],[data-testid*="threadline"],' +
-    '[data-testid*="thread-line"],[data-testid*="branch-line"],[class*="branch-line"]' +
-    '{opacity:var(--rn-native-lines,1)!important}';
+  // Reddit sets its colors again inside posts' and comments' shadow DOM, so the theme
+  // variables are repeated there (only while a theme is on).
+  var THEME_VARS = {
+    '--color-neutral-background': 'var(--rn-bg)',
+    '--color-neutral-background-weak': 'var(--rn-bg2)',
+    '--color-neutral-background-container': 'var(--rn-bg)',
+    '--color-neutral-background-container-strong': 'var(--rn-bg2)',
+    '--shreddit-content-background': 'var(--rn-bg)',
+    '--color-background': 'var(--rn-bg)'
+  };
+  var SHADOW_CSS = ':host-context(html.rn-theme),:host-context(html.rn-theme) *{' +
+    Object.keys(THEME_VARS).map(function (k) { return k + ':' + THEME_VARS[k] + '!important'; }).join(';') + '}';
 
   function styleShadow(el) {
     var root = el.shadowRoot;
@@ -212,6 +218,113 @@
     if (top < 0) window.scrollBy(0, top - 8);
   }
 
+  // ---------- rainbow threads ----------
+  // Reddit draws thread lines with thin borders inside each comment. Rather than guess its
+  // class names, find anything shaped like a line and recolor it by depth.
+  var lineVer = 0;
+
+  function threadColor(depth) {
+    var t = state.settings.threads || [];
+    if (!state.settings.rainbow || !t.length) return null;
+    return t[depth % t.length];
+  }
+
+  var SKIP_SLOTS = /^(comment|commentMeta|commentAvatar|actionRow|credit-bar)$/;
+
+  function lineCandidates(c) {
+    var out = [];
+    if (c.shadowRoot) out = out.concat(Array.prototype.slice.call(c.shadowRoot.querySelectorAll('*')));
+    var kids = c.children;
+    for (var i = 0; i < kids.length; i++) {
+      var k = kids[i];
+      if (k.tagName === 'SHREDDIT-COMMENT' || k.tagName === 'SHREDDIT-COMMENT-ACTION-ROW' ||
+          SKIP_SLOTS.test(attr(k, 'slot')) || k.querySelector('shreddit-comment')) continue;
+      out.push(k);
+      var sub = k.querySelectorAll('*');
+      if (sub.length < 80) out = out.concat(Array.prototype.slice.call(sub));
+      if (k.shadowRoot) out = out.concat(Array.prototype.slice.call(k.shadowRoot.querySelectorAll('*')));
+    }
+    return out;
+  }
+
+  function px(v) { return parseFloat(v) || 0; }
+
+  function lineKind(el, cs) {
+    var tag = el.tagName;
+    if (tag === 'STYLE' || tag === 'SLOT' || tag === 'svg' || tag === 'SVG' || tag === 'path') return null;
+    var bl = px(cs.borderLeftWidth), bb = px(cs.borderBottomWidth), bt = px(cs.borderTopWidth), br = px(cs.borderRightWidth);
+    if (bt === 0 && br === 0 && bl > 0 && bl <= 3 && cs.borderLeftStyle !== 'none') return 'border';
+    if (bt === 0 && br === 0 && bb > 0 && bb <= 3 && cs.borderBottomStyle !== 'none' && bl > 0) return 'border';
+    var w = el.offsetWidth, h = el.offsetHeight;
+    var bg = cs.backgroundColor;
+    if (w > 0 && w <= 3 && h >= 6 && bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') return 'bar';
+    return null;
+  }
+
+  function paintLines(c) {
+    var now = Date.now();
+    var info = c.__rnLines;
+    if (info && info.ver === lineVer) {
+      if (info.n > 0 || now - info.first > 5000 || now - info.last < 500) return;
+    }
+    (c.__rnPainted || []).forEach(function (p) { p.el.style.removeProperty(p.prop); });
+    var painted = [];
+    var n = 0;
+    var color = threadColor(parseInt(attr(c, 'depth'), 10) || 0);
+    var width = state.settings.threadWidth || 0;
+    function set(el, prop, val) { el.style.setProperty(prop, val, 'important'); painted.push({ el: el, prop: prop }); }
+    if (color) {
+      lineCandidates(c).forEach(function (el) {
+        var cs = getComputedStyle(el);
+        var kind = lineKind(el, cs);
+        if (!kind) return;
+        n++;
+        if (kind === 'border') {
+          set(el, 'border-color', color);
+          if (width) {
+            if (px(cs.borderLeftWidth) > 0) set(el, 'border-left-width', width + 'px');
+            if (px(cs.borderBottomWidth) > 0) set(el, 'border-bottom-width', width + 'px');
+          }
+        } else {
+          set(el, 'background-color', color);
+          if (width) set(el, 'width', width + 'px');
+        }
+      });
+    }
+    c.__rnPainted = painted;
+    c.__rnLines = {
+      ver: lineVer, n: color ? n : 1,
+      first: info && info.ver === lineVer ? info.first : now, last: now
+    };
+  }
+
+  // ---------- "Get the Reddit app" banners ----------
+  function skipThings(n) { return n.tagName === 'SHREDDIT-POST' || n.tagName === 'SHREDDIT-COMMENT'; }
+
+  function hideEl(n) {
+    if (n && n.style && n.style.display !== 'none') n.style.setProperty('display', 'none', 'important');
+  }
+
+  function removeAppBanners() {
+    deepAll(document.body || document.documentElement, function (n) {
+      return /^XPROMO-/.test(n.tagName) && !/NSFW/.test(n.tagName);
+    }, skipThings).forEach(hideEl);
+
+    var hit = deepFind(document.body || document.documentElement, function (n) {
+      if (n.childElementCount > 4) return false;
+      var t = text(n);
+      return t.length < 140 && /get the reddit app|open in (the )?app|use the app/i.test(t);
+    }, skipThings);
+    if (!hit) return;
+    // Hide the floating box it lives in.
+    var el = hit;
+    for (var i = 0; i < 14 && el; i++) {
+      var pos = getComputedStyle(el).position;
+      if (pos === 'fixed' || pos === 'sticky') { hideEl(el); return; }
+      el = el.parentElement || (el.getRootNode && el.getRootNode().host) || null;
+    }
+  }
+
   // ---------- marks (bookmarked / hidden / thread styles) ----------
   function setFlag(el, name, on) {
     if (on && !el.hasAttribute(name)) el.setAttribute(name, '');
@@ -230,8 +343,9 @@
         setFlag(box, 'data-rn-hidden', !!state.hidden[id] && !onPost);
         if (el.hasAttribute('promoted') || attr(el, 'post-type') === 'promoted') setFlag(box, 'data-rn-ad', true);
       } else {
-        styleShadow(el);
+        paintLines(el);
       }
+      styleShadow(el);
     }
   }
 
@@ -335,6 +449,7 @@
         lastSlow = t;
         syncTabs();
         removeSso();
+        removeAppBanners();
       }
       if (pendingTab && t > pendingUntil) {
         pendingTab = null;
@@ -442,7 +557,11 @@
     }, 220);
 
     // A finished swipe should not also count as a tap on whatever was under the finger.
-    var swallow = function (e) { e.stopPropagation(); e.preventDefault(); };
+    var swallow = function (e) {
+      if (!e.isTrusted) return; // our own vote/reply clicks must go through
+      e.stopPropagation();
+      e.preventDefault();
+    };
     window.addEventListener('click', swallow, true);
     setTimeout(function () { window.removeEventListener('click', swallow, true); }, 400);
 
@@ -542,7 +661,11 @@
     setState: function (s) {
       if (s.saved) state.saved = toSet(s.saved);
       if (s.hidden) state.hidden = toSet(s.hidden);
-      if (s.settings) state.settings = s.settings;
+      if (s.settings) {
+        var before = JSON.stringify([state.settings.threads, state.settings.rainbow, state.settings.threadWidth]);
+        state.settings = s.settings;
+        if (JSON.stringify([s.settings.threads, s.settings.rainbow, s.settings.threadWidth]) !== before) lineVer++;
+      }
       applySettings();
       markAll();
       syncTabs();

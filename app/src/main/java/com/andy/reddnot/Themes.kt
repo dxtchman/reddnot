@@ -53,6 +53,26 @@ object Themes {
             "ocean", "Ocean",
             listOf(0xFF00B4D8, 0xFF48CAE4, 0xFF90E0EF, 0xFF0096C7, 0xFF2EC4B6, 0xFF4361EE, 0xFF7209B7, 0xFF3A86FF),
         ),
+        Palette(
+            "sunset", "Sunset",
+            listOf(0xFFFF6B6B, 0xFFFF8E53, 0xFFFFB347, 0xFFFFD166, 0xFFF4845F, 0xFFE63946, 0xFFC9184A, 0xFFFF758F),
+        ),
+        Palette(
+            "synthwave", "Synthwave",
+            listOf(0xFFF72585, 0xFFB5179E, 0xFF7209B7, 0xFF560BAD, 0xFF4361EE, 0xFF4CC9F0, 0xFFFF9E00, 0xFFFF2A6D),
+        ),
+        Palette(
+            "matrix", "Matrix",
+            listOf(0xFF00FF41, 0xFF00D936, 0xFF39FF14, 0xFF008F11, 0xFF7CFC00, 0xFF00C853, 0xFF64DD17, 0xFF1DE9B6),
+        ),
+        Palette(
+            "fire", "Fire",
+            listOf(0xFFFF0000, 0xFFFF4500, 0xFFFF7F00, 0xFFFFA500, 0xFFFFD700, 0xFFFF6347, 0xFFDC143C, 0xFFFF8C00),
+        ),
+        Palette(
+            "mono", "Mono",
+            listOf(0xFFFFFFFF, 0xFFD4D4D8, 0xFFA1A1AA, 0xFF71717A, 0xFFE4E4E7, 0xFFBDBDC4, 0xFF8E8E96, 0xFF6B6B73),
+        ),
     )
 
     fun bg(key: String) = backgrounds.firstOrNull { it.key == key } ?: backgrounds[0]

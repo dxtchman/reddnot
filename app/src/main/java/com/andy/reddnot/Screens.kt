@@ -251,7 +251,7 @@ private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
             title = {
                 Column(Modifier.clickable(onClick = browser::scrollToTop)) {
                     Text(
-                        if (onNews) "News" else Links.title(url, browser.pageTitle),
+                        if (onNews) "News · r/$sub" else Links.title(url, browser.pageTitle),
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -334,6 +334,21 @@ private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
         if (onHome || onNews) {
             FeedTabs(selected = if (onNews) "news" else browser.homeTab ?: "foryou") { tab ->
                 if (tab == "news") browser.load(store.newsUrl()) else browser.selectHomeTab(tab)
+            }
+        }
+        if (onNews) {
+            Row(
+                Modifier.fillMaxWidth().background(Bar).horizontalScroll(rememberScrollState())
+                    .padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                store.newsList().forEach { name ->
+                    FilterChip(
+                        selected = sub.equals(name, ignoreCase = true),
+                        onClick = { browser.load(store.newsUrl(name)) },
+                        label = { Text("r/$name") },
+                    )
+                }
             }
         }
 
@@ -689,6 +704,12 @@ private fun MeScreen(store: Store, browser: Browser, open: (String) -> Unit) {
             }
             item {
                 SettingLabel("Comment thread lines")
+                Text(
+                    "Rainbow colors each reply level, like Apollo.",
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                )
                 Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("rainbow" to "Rainbow", "accent" to "Accent", "off" to "Reddit's").forEach { (mode, label) ->
                         FilterChip(
@@ -699,14 +720,27 @@ private fun MeScreen(store: Store, browser: Browser, open: (String) -> Unit) {
                     }
                 }
             }
-            if (store.threadMode == "rainbow") {
-                item {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Themes.palettes.forEach { palette ->
-                            PaletteRow(palette, selected = store.paletteKey == palette.key) {
-                                store.changePalette(palette.key); browser.pushState()
-                            }
+            item {
+                SettingLabel("Thread colors")
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    Themes.palettes.forEach { palette ->
+                        PaletteRow(palette, selected = store.threadMode == "rainbow" && store.paletteKey == palette.key) {
+                            store.changePalette(palette.key)
+                            store.changeThreadMode("rainbow")
+                            browser.pushState()
                         }
+                    }
+                }
+            }
+            item {
+                SettingLabel("Line thickness")
+                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(0 to "Reddit's", 2 to "Medium", 3 to "Thick").forEach { (px, label) ->
+                        FilterChip(
+                            selected = store.threadWidth == px,
+                            onClick = { store.changeThreadWidth(px); browser.pushState() },
+                            label = { Text(label) },
+                        )
                     }
                 }
             }
@@ -769,7 +803,7 @@ private fun MeScreen(store: Store, browser: Browser, open: (String) -> Unit) {
                     OutlinedTextField(
                         value = news,
                         onValueChange = { news = it },
-                        label = { Text("Subreddits, separated by spaces") },
+                        label = { Text("News subreddits, separated by spaces") },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { save() }),
                         modifier = Modifier.fillMaxWidth(),
@@ -794,7 +828,7 @@ private fun MeScreen(store: Store, browser: Browser, open: (String) -> Unit) {
             }
             item {
                 Text(
-                    "Reddnot 0.2 · a custom shell for reddit.com",
+                    "Reddnot 0.3 · a custom shell for reddit.com",
                     color = Muted,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(16.dp),
