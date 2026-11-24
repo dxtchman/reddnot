@@ -68,6 +68,9 @@ class Store(context: Context) {
     /** Subreddits behind the News tab, joined with "+". */
     var newsSubs by mutableStateOf(prefs.getString("newsSubs", null) ?: DEFAULT_NEWS)
         private set
+    /** Reddit's own News feed address, found in its site menu. */
+    var newsHref by mutableStateOf(prefs.getString("newsHref", null))
+        private set
     /** Swipe slot ("post.right.0") -> action id ("up"). */
     val swipes = mutableStateMapOf<String, String>()
     var hideHeader by mutableStateOf(prefs.getBoolean("hideHeader", true))
@@ -195,6 +198,8 @@ class Store(context: Context) {
 
     // Reddit no longer serves combined feeds (r/a+b sends you home), so the News tab
     // shows one news subreddit at a time with chips to switch between them.
+    fun changeNewsHref(href: String) { newsHref = href; prefs.edit().putString("newsHref", href).apply() }
+
     fun newsList(): List<String> = newsSubs.split('+').filter { it.isNotBlank() }
 
     fun newsUrl(sub: String = newsList().firstOrNull() ?: "news") = "https://www.reddit.com/r/$sub/"

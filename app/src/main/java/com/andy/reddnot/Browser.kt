@@ -35,10 +35,15 @@ import kotlin.math.abs
  * The reddit.com WebView plus everything around it: the injected Reddnot script,
  * link handling, and messages coming back from the page (swipes, bookmarks, hides).
  */
+/** First guess at Reddit's News feed address, used until the page's own News link is found. */
+const val NEWS_GUESS = "https://www.reddit.com/news/"
+
 @SuppressLint("SetJavaScriptEnabled")
 class Browser(
     private val context: Context,
     private val store: Store,
+    /** Which feed tab this page belongs to: "foryou", "following" or "news". */
+    val key: String,
     private val showFileChooser: (ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams) -> Boolean,
 ) {
     var url by mutableStateOf(HOME)
@@ -56,6 +61,18 @@ class Browser(
     var homeTab by mutableStateOf<String?>(null)
         private set
     private var pendingTab: String? = null
+
+    /** For You / Following page: the Reddit home tab this page always shows. */
+    private var fixedHomeTab: String? = null
+
+    /** News page: true when Reddit's News feed couldn't be opened and news subreddits are shown. */
+    var newsFallback by mutableStateOf(false)
+        private set
+    private var newsRoot: String? = null
+    private var newsChecked = false
+
+    /** Set by [Panes]: sends bookmarks/settings to every page, not just this one. */
+    var broadcast: () -> Unit = { pushStateLocal() }
 
     /** Fullscreen video view from the page, shown over the whole app. */
     var fullscreenView by mutableStateOf<View?>(null)
@@ -176,15 +193,16 @@ class Browser(
 
             override fun onPageCommitVisible(view: WebView, url: String) {
                 if (!documentStartScript) view.evaluateJavascript(pageScript, null)
-                pushState()
+                pushStateLocal()
             }
 
             override fun onPageFinished(view: WebView, url: String) {
                 loading = false
                 this@Browser.view.isRefreshing = false
                 if (!documentStartScript) view.evaluateJavascript(pageScript, null)
-                pushState()
+                pushStateLocal()
                 CookieManager.getInstance().flush()
+                checkNewsPage(url)
             }
 
             override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
@@ -263,14 +281,72 @@ class Browser(
         }
     }
 
-    /** Switches Reddit's home feed to "foryou" or "following". */
-    fun selectHomeTab(tab: String) {
+    /** Starts this page on Reddit's home feed, always on [tab] ("foryou" or "following"). */
+    fun startHome(tab: String) {
+        fixedHomeTab = tab
         homeTab = tab
-        if (Links.isHomeFeed(url)) {
-            runFeedTab(tab)
-        } else {
-            pendingTab = tab
-            load(HOME)
+        pendingTab = tab
+        load(HOME)
+    }
+
+    /** Starts this page on Reddit's News feed (or news subreddits if that isn't available). */
+    fun startNews() {
+        newsRoot = store.newsHref ?: NEWS_GUESS
+        load(newsRoot!!)
+    }
+
+    /** True on this tab's own feed page (not inside a post or another subreddit). */
+    fun atRoot(): Boolean = isRoot(url)
+
+    private fun isRoot(u: String): Boolean = when {
+        fixedHomeTab != null -> Links.isHomeFeed(u)
+        key == "news" -> if (newsFallback) store.isNews(u) else samePage(u, newsRoot ?: NEWS_GUESS)
+        else -> true
+    }
+
+    /** [a] is the page [b] or somewhere under it (Reddit may add a sort or tab to the path). */
+    private fun samePage(a: String, b: String) =
+        Links.path(a).trimEnd('/').lowercase().startsWith(Links.path(b).trimEnd('/').lowercase())
+
+    /**
+     * Tapping the tab you're already on: back to the tab's feed if you're deeper in,
+     * then to the top, and if you're already at the top, refresh.
+     */
+    fun retap() {
+        when {
+            !atRoot() -> goToRoot()
+            webView.scrollY > 4 -> scrollToTop()
+            else -> {
+                view.isRefreshing = true
+                webView.reload()
+            }
+        }
+    }
+
+    private fun goToRoot() {
+        val history = webView.copyBackForwardList()
+        for (i in history.currentIndex - 1 downTo 0) {
+            if (isRoot(history.getItemAtIndex(i).url)) {
+                webView.goBackOrForward(i - history.currentIndex)
+                return
+            }
+        }
+        when {
+            fixedHomeTab != null -> { pendingTab = fixedHomeTab; load(HOME) }
+            key == "news" -> load(if (newsFallback) store.newsUrl() else newsRoot ?: NEWS_GUESS)
+        }
+    }
+
+    /** If Reddit's News link didn't work (it sent us home or to an error), show news subreddits. */
+    private fun checkNewsPage(loaded: String) {
+        if (key != "news" || newsChecked || newsFallback) return
+        newsChecked = true
+        val failed = Links.isHomeFeed(loaded) || pageTitle.contains("not found", ignoreCase = true) ||
+            !samePage(loaded, newsRoot ?: NEWS_GUESS)
+        if (failed) {
+            newsFallback = true
+            load(store.newsUrl())
+            onSnack("Reddit's News feed didn't open, so News shows news subreddits for now", null)
         }
     }
 
@@ -288,8 +364,11 @@ class Browser(
     }
 
     // ---------- talking to the page ----------
-    /** Sends bookmarks, hidden posts and settings to the page script. */
-    fun pushState() {
+    /** Sends bookmarks, hidden posts and settings to every open page. */
+    fun pushState() = broadcast()
+
+    /** Sends bookmarks, hidden posts and settings to this page's script. */
+    fun pushStateLocal() {
         applyNativeLook()
         val state = JSONObject()
             .put("saved", store.bookmarkIds())
@@ -340,8 +419,25 @@ class Browser(
         val msg = runCatching { JSONObject(raw) }.getOrNull() ?: return
         when (msg.optString("type")) {
             "ready" -> {
-                pushState()
-                pendingTab?.let { if (Links.isHomeFeed(url)) { runFeedTab(it); pendingTab = null } }
+                pushStateLocal()
+                if (Links.isHomeFeed(url)) {
+                    // Reddit remembers the last tab across pages, so each home page re-picks its own.
+                    (pendingTab ?: fixedHomeTab)?.let { runFeedTab(it) }
+                    pendingTab = null
+                }
+            }
+
+            "newsLink" -> {
+                val href = msg.optString("href")
+                if (href.isNotBlank() && store.newsHref != href) {
+                    store.changeNewsHref(href)
+                    if (key == "news" && (newsFallback || !samePage(newsRoot ?: "", href))) {
+                        newsFallback = false
+                        newsChecked = false
+                        newsRoot = href
+                        load(href)
+                    }
+                }
             }
 
             "feedTab" -> homeTab = msg.optString("tab").ifBlank { null }

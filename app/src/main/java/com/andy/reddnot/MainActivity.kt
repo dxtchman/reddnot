@@ -29,7 +29,7 @@ class UiState {
 
 class MainActivity : ComponentActivity() {
     private lateinit var store: Store
-    private lateinit var browser: Browser
+    private lateinit var panes: Panes
     private val ui = UiState()
 
     private var fileCallback: ValueCallback<Array<Uri>>? = null
@@ -45,47 +45,54 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         store = Store(this)
-        browser = Browser(this, store) { callback, params ->
-            fileCallback?.onReceiveValue(null)
-            fileCallback = callback
-            try {
-                filePicker.launch(params.createIntent())
-                true
-            } catch (_: Exception) {
-                fileCallback = null
-                false
+        panes = Panes { key ->
+            Browser(this, store, key, ::chooseFile).also {
+                if (key == "news") it.startNews() else it.startHome(key)
             }
         }
-        browser.load(linkFrom(intent) ?: HOME)
+        panes.select("foryou")
+        linkFrom(intent)?.let { panes.active.load(it) }
 
         setContent {
             AppTheme(store) {
-                App(store, browser, ui, onFullscreen = ::setFullscreen)
+                App(store, panes, ui, onFullscreen = ::setFullscreen)
             }
+        }
+    }
+
+    private fun chooseFile(callback: ValueCallback<Array<Uri>>, params: WebChromeClient.FileChooserParams): Boolean {
+        fileCallback?.onReceiveValue(null)
+        fileCallback = callback
+        return try {
+            filePicker.launch(params.createIntent())
+            true
+        } catch (_: Exception) {
+            fileCallback = null
+            false
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         linkFrom(intent)?.let {
-            browser.load(it)
+            panes.active.load(it)
             ui.tab = Tab.Feed
         }
     }
 
     override fun onResume() {
         super.onResume()
-        browser.webView.onResume()
+        panes.all().forEach { it.webView.onResume() }
     }
 
     override fun onPause() {
-        browser.webView.onPause()
+        panes.all().forEach { it.webView.onPause() }
         android.webkit.CookieManager.getInstance().flush()
         super.onPause()
     }
 
     override fun onDestroy() {
-        if (isFinishing) browser.webView.destroy()
+        if (isFinishing) panes.all().forEach { it.webView.destroy() }
         super.onDestroy()
     }
 

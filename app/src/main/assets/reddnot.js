@@ -419,7 +419,7 @@
     if (pendingTab) {
       var target = tabs.filter(function (n) { return TAB_NAMES[text(n).toLowerCase()] === pendingTab; })[0];
       if (target) {
-        target.click();
+        if (!isSelected(target)) target.click();
         lastTab = pendingTab;
         send({ type: 'feedTab', tab: pendingTab });
         pendingTab = null;
@@ -432,6 +432,23 @@
     if (now && now !== lastTab) {
       lastTab = now;
       send({ type: 'feedTab', tab: now });
+    }
+  }
+
+  // ---------- Reddit's own News feed link ----------
+  // Reddit keeps its News feed in the site menu. Find that link so the app's News tab can use it.
+  var newsSent = null;
+  function findNewsLink() {
+    var a = deepFind(document.body || document.documentElement, function (n) {
+      if (n.tagName !== 'A' || !/^news$/i.test(text(n))) return false;
+      var h = n.getAttribute('href') || '';
+      return h && !/^\/?r\//i.test(h) && !/^https?:\/\/(?!([a-z]+\.)?reddit\.com)/i.test(h);
+    }, skipThings);
+    if (!a) return;
+    var href = absUrl(a.getAttribute('href'));
+    if (href !== newsSent) {
+      newsSent = href;
+      send({ type: 'newsLink', href: href });
     }
   }
 
@@ -450,6 +467,7 @@
         syncTabs();
         removeSso();
         removeAppBanners();
+        findNewsLink();
       }
       if (pendingTab && t > pendingUntil) {
         pendingTab = null;

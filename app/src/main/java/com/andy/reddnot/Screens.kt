@@ -105,12 +105,13 @@ import kotlinx.coroutines.launch
 // ===================================================================== app shell
 
 @Composable
-fun App(store: Store, browser: Browser, ui: UiState, onFullscreen: (Boolean) -> Unit) {
+fun App(store: Store, panes: Panes, ui: UiState, onFullscreen: (Boolean) -> Unit) {
+    val browser = panes.active
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        browser.onSnack = { text, undo ->
+        panes.snack = { text, undo ->
             scope.launch {
                 snackbar.currentSnackbarData?.dismiss()
                 val result = snackbar.showSnackbar(
@@ -124,7 +125,7 @@ fun App(store: Store, browser: Browser, ui: UiState, onFullscreen: (Boolean) -> 
     }
 
     val openInFeed: (String) -> Unit = { url ->
-        browser.load(url)
+        panes.active.load(url)
         ui.tab = Tab.Feed
     }
 
@@ -137,7 +138,7 @@ fun App(store: Store, browser: Browser, ui: UiState, onFullscreen: (Boolean) -> 
             containerColor = Bg,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = { SnackbarHost(snackbar) },
-            bottomBar = { BottomBar(ui, onReselectFeed = browser::scrollToTop) },
+            bottomBar = { BottomBar(ui, onReselectFeed = { panes.active.retap() }) },
         ) { pad: PaddingValues ->
             Box(
                 Modifier
@@ -146,7 +147,7 @@ fun App(store: Store, browser: Browser, ui: UiState, onFullscreen: (Boolean) -> 
                     .consumeWindowInsets(pad)
                     .imePadding()
             ) {
-                FeedScreen(store, browser, visible = ui.tab == Tab.Feed)
+                FeedScreen(store, panes, visible = ui.tab == Tab.Feed)
                 when (ui.tab) {
                     Tab.Feed -> Unit
                     Tab.Subs -> Page { SubsScreen(store, browser, openInFeed) }
@@ -157,7 +158,8 @@ fun App(store: Store, browser: Browser, ui: UiState, onFullscreen: (Boolean) -> 
         }
 
         // Fullscreen video from the page
-        val full = browser.fullscreenView
+        val fullPane = panes.created.firstOrNull { it.fullscreenView != null }
+        val full = fullPane?.fullscreenView
         LaunchedEffect(full != null) { onFullscreen(full != null) }
         if (full != null) {
             key(full) {
@@ -172,7 +174,7 @@ fun App(store: Store, browser: Browser, ui: UiState, onFullscreen: (Boolean) -> 
                     },
                 )
             }
-            BackHandler { browser.exitFullscreen() }
+            BackHandler { fullPane?.exitFullscreen() }
         }
     }
 }
@@ -224,7 +226,8 @@ private val barColors
 // ===================================================================== feed (the WebView)
 
 @Composable
-private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
+private fun FeedScreen(store: Store, panes: Panes, visible: Boolean) {
+    val browser = panes.active
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     var menu by remember { mutableStateOf(false) }
@@ -235,8 +238,9 @@ private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
     val sub = Links.subredditOf(url)
     val postId = Links.postIdOf(url)
     val sort = Links.sortLabel(url)
-    val onNews = store.isNews(url)
-    val onHome = Links.isHomeFeed(url)
+    val isNewsPane = browser.key == "news"
+    val onNews = isNewsPane && browser.newsFallback && store.isNews(url)
+    val atRoot = browser.atRoot()
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
@@ -251,7 +255,11 @@ private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
             title = {
                 Column(Modifier.clickable(onClick = browser::scrollToTop)) {
                     Text(
-                        if (onNews) "News · r/$sub" else Links.title(url, browser.pageTitle),
+                        when {
+                            onNews -> "News · r/$sub"
+                            isNewsPane && atRoot -> "News"
+                            else -> Links.title(url, browser.pageTitle)
+                        },
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -331,9 +339,9 @@ private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
             },
         )
 
-        if (onHome || onNews) {
-            FeedTabs(selected = if (onNews) "news" else browser.homeTab ?: "foryou") { tab ->
-                if (tab == "news") browser.load(store.newsUrl()) else browser.selectHomeTab(tab)
+        if (atRoot) {
+            FeedTabs(selected = panes.activeKey) { tab ->
+                if (tab == panes.activeKey) panes.active.retap() else panes.select(tab)
             }
         }
         if (onNews) {
@@ -353,13 +361,18 @@ private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
         }
 
         Box(Modifier.fillMaxSize()) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = {
-                    browser.view.also { (it.parent as? ViewGroup)?.removeView(it) }
-                },
-                update = { it.visibility = if (visible) View.VISIBLE else View.INVISIBLE },
-            )
+            // One live page per tab; only the current one is shown.
+            panes.created.forEach { pane ->
+                key(pane.key) {
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { pane.view.also { v -> (v.parent as? ViewGroup)?.removeView(v) } },
+                        update = {
+                            it.visibility = if (visible && pane.key == panes.activeKey) View.VISIBLE else View.INVISIBLE
+                        },
+                    )
+                }
+            }
             if (browser.loading) {
                 LinearProgressIndicator(
                     progress = { browser.progress / 100f },
@@ -828,7 +841,7 @@ private fun MeScreen(store: Store, browser: Browser, open: (String) -> Unit) {
             }
             item {
                 Text(
-                    "Reddnot 0.3 · a custom shell for reddit.com",
+                    "Reddnot 0.4 · a custom shell for reddit.com",
                     color = Muted,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(16.dp),
