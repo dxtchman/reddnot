@@ -2,7 +2,9 @@ package com.andy.reddnot
 
 import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.json.JSONArray
@@ -49,8 +51,22 @@ class Store(context: Context) {
     var hiddenCount by mutableStateOf(0)
         private set
 
-    var trueBlack by mutableStateOf(prefs.getBoolean("trueBlack", true))
+    var bgKey by mutableStateOf(prefs.getString("bgKey", null) ?: "black")
         private set
+    var accentKey by mutableStateOf(prefs.getString("accentKey", null) ?: "blue")
+        private set
+    /** "rainbow", "accent" or "off" */
+    var threadMode by mutableStateOf(prefs.getString("threadMode", null) ?: "rainbow")
+        private set
+    var paletteKey by mutableStateOf(prefs.getString("paletteKey", null) ?: "classic")
+        private set
+    var textZoom by mutableIntStateOf(prefs.getInt("textZoom", 100))
+        private set
+    /** Subreddits behind the News tab, joined with "+". */
+    var newsSubs by mutableStateOf(prefs.getString("newsSubs", null) ?: DEFAULT_NEWS)
+        private set
+    /** Swipe slot ("post.right.0") -> action id ("up"). */
+    val swipes = mutableStateMapOf<String, String>()
     var hideHeader by mutableStateOf(prefs.getBoolean("hideHeader", true))
         private set
     var hideAds by mutableStateOf(prefs.getBoolean("hideAds", true))
@@ -70,6 +86,10 @@ class Store(context: Context) {
             for (i in 0 until arr.length()) hidden.add(arr.getString(i))
         }
         hiddenCount = hidden.size
+        val saved = runCatching { JSONObject(prefs.getString("swipes", "{}") ?: "{}") }.getOrNull()
+        SwipeActions.defaults.forEach { (slot, action) ->
+            swipes[slot] = saved?.optString(slot)?.ifBlank { null } ?: action
+        }
     }
 
     // ---- bookmarks ----
@@ -144,12 +164,65 @@ class Store(context: Context) {
     }
 
     // ---- settings ----
-    fun changeTrueBlack(on: Boolean) { trueBlack = on; prefs.edit().putBoolean("trueBlack", on).apply() }
+    fun changeBg(key: String) { bgKey = key; prefs.edit().putString("bgKey", key).apply() }
+    fun changeAccent(key: String) { accentKey = key; prefs.edit().putString("accentKey", key).apply() }
+    fun changeThreadMode(mode: String) { threadMode = mode; prefs.edit().putString("threadMode", mode).apply() }
+    fun changePalette(key: String) { paletteKey = key; prefs.edit().putString("paletteKey", key).apply() }
+    fun changeTextZoom(zoom: Int) { textZoom = zoom; prefs.edit().putInt("textZoom", zoom).apply() }
+
+    fun changeSwipe(slot: String, action: String) {
+        swipes[slot] = action
+        val o = JSONObject()
+        swipes.forEach { (k, v) -> o.put(k, v) }
+        prefs.edit().putString("swipes", o.toString()).apply()
+    }
+
+    /** Accepts "news worldnews", "r/news, r/worldnews" or "news+worldnews". */
+    fun changeNewsSubs(raw: String): Boolean {
+        val names = raw.split(Regex("[\\s,+]+"))
+            .map { it.trim().removePrefix("/").removePrefix("r/").trim('/') }
+            .filter { it.matches(Regex("[A-Za-z0-9_]{2,30}")) }
+            .distinctBy { it.lowercase() }
+        if (names.isEmpty()) return false
+        newsSubs = names.joinToString("+")
+        prefs.edit().putString("newsSubs", newsSubs).apply()
+        return true
+    }
+
+    fun newsUrl() = "https://www.reddit.com/r/$newsSubs/"
+
+    fun isNews(url: String): Boolean {
+        val p = Links.path(url).trimEnd('/').lowercase()
+        val base = "/r/${newsSubs.lowercase()}"
+        return p == base || p.startsWith("$base/")
+    }
+
+    fun threadColors(): List<Long> =
+        if (threadMode == "accent") List(8) { Themes.accent(accentKey).color }
+        else Themes.palette(paletteKey).colors
     fun changeHideHeader(on: Boolean) { hideHeader = on; prefs.edit().putBoolean("hideHeader", on).apply() }
     fun changeHideAds(on: Boolean) { hideAds = on; prefs.edit().putBoolean("hideAds", on).apply() }
 
-    fun settingsJson(): JSONObject = JSONObject()
-        .put("black", trueBlack)
-        .put("noHeader", hideHeader)
-        .put("noAds", hideAds)
+    fun settingsJson(): JSONObject {
+        val bg = Themes.bg(bgKey)
+        val theme: Any = if (bg.overridePage) {
+            JSONObject().put("bg", Themes.hex(bg.bg)).put("bg2", Themes.hex(bg.bar)).put("bg3", Themes.hex(bg.card))
+        } else {
+            JSONObject.NULL
+        }
+        fun side(kind: String, dir: String) =
+            JSONArray(listOf(swipes["$kind.$dir.0"] ?: "none", swipes["$kind.$dir.1"] ?: "none"))
+        fun kind(k: String) = JSONObject().put("right", side(k, "right")).put("left", side(k, "left"))
+        return JSONObject()
+            .put("noHeader", hideHeader)
+            .put("noAds", hideAds)
+            .put("rainbow", threadMode != "off")
+            .put("theme", theme)
+            .put("threads", JSONArray(threadColors().map { Themes.hex(it) }))
+            .put("swipes", JSONObject().put("post", kind("post")).put("comment", kind("comment")))
+    }
+
+    companion object {
+        const val DEFAULT_NEWS = "news+worldnews+technology+science"
+    }
 }

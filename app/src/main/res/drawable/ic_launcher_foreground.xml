@@ -1,23 +1,60 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A chat bubble with swipe arrows: the app's swipe-to-act idea. -->
+<!-- Reddnot's mascot: an original little devil in a black fedora. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- bubble -->
+    <!-- horns poking through the hat -->
     <path
-        android:fillColor="#FF5B8CFF"
-        android:pathData="M36,32h36a8,8 0,0 1,8 8v22a8,8 0,0 1,-8 8h-18l-10,9v-9h-8a8,8 0,0 1,-8 -8v-22a8,8 0,0 1,8 -8z" />
+        android:fillColor="#FFC1121F"
+        android:pathData="M43,40 Q35,38 32.5,27.5 Q38,34 43.5,34.5 Z" />
+    <path
+        android:fillColor="#FFC1121F"
+        android:pathData="M65,40 Q73,38 75.5,27.5 Q70,34 64.5,34.5 Z" />
 
-    <!-- left arrow -->
+    <!-- face -->
+    <path
+        android:fillColor="#FFE5383B"
+        android:pathData="M36,60 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0z" />
+
+    <!-- goatee -->
+    <path
+        android:fillColor="#FF9E0F1E"
+        android:pathData="M50,77 Q54,79.2 58,77 L54,85 Z" />
+
+    <!-- fedora: brim, crown, band -->
+    <path
+        android:fillColor="#FF111114"
+        android:pathData="M28,46.5 a26,5.8 0 1,0 52,0 a26,5.8 0 1,0 -52,0z" />
+    <path
+        android:fillColor="#FF111114"
+        android:pathData="M40,46 L42.5,31 Q48,26.5 54,30.5 Q60,26.5 65.5,31 L68,46 Z" />
+    <path
+        android:fillColor="#FFB5172F"
+        android:pathData="M40.8,40.5 L67.2,40.5 L67.9,44.5 L40.1,44.5 Z" />
+
+    <!-- eyes and sly brows -->
+    <path
+        android:fillColor="#FFFFD60A"
+        android:pathData="M44.4,58.5 a2.7,2.1 0 1,0 5.4,0 a2.7,2.1 0 1,0 -5.4,0z" />
+    <path
+        android:fillColor="#FFFFD60A"
+        android:pathData="M58.2,58.5 a2.7,2.1 0 1,0 5.4,0 a2.7,2.1 0 1,0 -5.4,0z" />
+    <path
+        android:strokeColor="#FF1A0A0D"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M43,53.2 L50.5,56.2 M65,53.2 L57.5,56.2" />
+
+    <!-- grin with a fang -->
+    <path
+        android:strokeColor="#FF1A0A0D"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M45,65.5 Q54,74 63,65.5" />
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M41,51l8,-7v4.5h7v5h-7v4.5z" />
-
-    <!-- right arrow -->
-    <path
-        android:fillColor="#FFFF8A3D"
-        android:pathData="M67,51l-8,-7v4.5h-6v5h6v4.5z" />
+        android:pathData="M49.2,68.4 L50.7,72 L52.3,69.4 Z" />
 </vector>

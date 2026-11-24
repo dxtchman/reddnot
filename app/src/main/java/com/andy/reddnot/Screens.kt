@@ -10,7 +10,10 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -60,6 +64,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -127,9 +132,9 @@ fun App(store: Store, browser: Browser, ui: UiState, onFullscreen: (Boolean) -> 
         if (ui.tab != Tab.Feed) ui.tab = Tab.Feed else browser.goBack()
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().background(Bg)) {
         Scaffold(
-            containerColor = Color.Black,
+            containerColor = Bg,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = { BottomBar(ui, onReselectFeed = browser::scrollToTop) },
@@ -175,7 +180,7 @@ fun App(store: Store, browser: Browser, ui: UiState, onFullscreen: (Boolean) -> 
 /** An opaque page drawn over the feed (the WebView stays alive underneath). */
 @Composable
 private fun Page(content: @Composable () -> Unit) {
-    Surface(Modifier.fillMaxSize(), color = Color.Black) { content() }
+    Surface(Modifier.fillMaxSize(), color = Bg) { content() }
 }
 
 @Composable
@@ -230,6 +235,8 @@ private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
     val sub = Links.subredditOf(url)
     val postId = Links.postIdOf(url)
     val sort = Links.sortLabel(url)
+    val onNews = store.isNews(url)
+    val onHome = Links.isHomeFeed(url)
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
@@ -244,7 +251,7 @@ private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
             title = {
                 Column(Modifier.clickable(onClick = browser::scrollToTop)) {
                     Text(
-                        Links.title(url, browser.pageTitle),
+                        if (onNews) "News" else Links.title(url, browser.pageTitle),
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -290,7 +297,7 @@ private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
                             leadingIcon = { Icon(Icons.Filled.Refresh, null) },
                             onClick = { menu = false; browser.reload() },
                         )
-                        if (sub != null && !store.hasSub(sub)) {
+                        if (sub != null && !sub.contains('+') && !store.hasSub(sub)) {
                             DropdownMenuItem(
                                 text = { Text("Add r/$sub to Subreddits") },
                                 leadingIcon = { Icon(Icons.Filled.Add, null) },
@@ -324,6 +331,12 @@ private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
             },
         )
 
+        if (onHome || onNews) {
+            FeedTabs(selected = if (onNews) "news" else browser.homeTab ?: "foryou") { tab ->
+                if (tab == "news") browser.load(store.newsUrl()) else browser.selectHomeTab(tab)
+            }
+        }
+
         Box(Modifier.fillMaxSize()) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -347,6 +360,32 @@ private fun FeedScreen(store: Store, browser: Browser, visible: Boolean) {
         SearchDialog(sub, onDismiss = { searching = false }) { query, onlySub ->
             searching = false
             browser.load(Links.search(query, if (onlySub) sub else null))
+        }
+    }
+}
+
+/** For You · Following · News, under the top bar on the home feed. */
+@Composable
+private fun FeedTabs(selected: String, onSelect: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth().background(Bar).padding(horizontal = 8.dp)) {
+        listOf("foryou" to "For You", "following" to "Following", "news" to "News").forEach { (key, label) ->
+            val on = key == selected
+            Column(
+                Modifier.weight(1f).clickable { onSelect(key) }.padding(top = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    label,
+                    color = if (on) Color.White else Muted,
+                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    Modifier.width(40.dp).height(3.dp).clip(RoundedCornerShape(2.dp))
+                        .background(if (on) Accent else Color.Transparent)
+                )
+            }
         }
     }
 }
@@ -438,10 +477,10 @@ private fun SubsScreen(store: Store, browser: Browser, open: (String) -> Unit) {
 private fun SubRow(title: String, subtitle: String?, onClick: () -> Unit) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
-        colors = ListItemDefaults.colors(containerColor = Color.Black),
+        colors = ListItemDefaults.colors(containerColor = Bg),
         leadingContent = {
             Box(
-                Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).background(Color(0xFF1E2A4A)),
+                Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).background(Accent.copy(alpha = 0.18f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -529,7 +568,7 @@ private fun SavedScreen(store: Store, browser: Browser, open: (String) -> Unit) 
                     ) {
                         BookmarkRow(b) { open(b.url) }
                     }
-                    HorizontalDivider(color = Color(0xFF1C1C20))
+                    HorizontalDivider(color = Card)
                 }
             }
         }
@@ -539,7 +578,7 @@ private fun SavedScreen(store: Store, browser: Browser, open: (String) -> Unit) 
 @Composable
 private fun BookmarkRow(b: Bookmark, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().background(Color.Black).clickable(onClick = onClick).padding(16.dp),
+        Modifier.fillMaxWidth().background(Bg).clickable(onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(Modifier.weight(1f)) {
@@ -632,14 +671,59 @@ private fun MeScreen(store: Store, browser: Browser, open: (String) -> Unit) {
             item { LinkRow("Log in") { open("https://www.reddit.com/login/") } }
             item { LinkRow("Log out") { confirmLogout = true } }
 
-            item { SectionHeader("Look") }
+            item { SectionHeader("Theme") }
             item {
-                ToggleRow("True black", "Pure black background", store.trueBlack) {
-                    store.changeTrueBlack(it); browser.pushState()
+                SettingLabel("Background")
+                SwatchRow(
+                    items = Themes.backgrounds.map { Triple(it.key, it.name, Color(it.bg)) },
+                    selected = store.bgKey,
+                    ring = true,
+                ) { store.changeBg(it); browser.pushState() }
+            }
+            item {
+                SettingLabel("Accent color")
+                SwatchRow(
+                    items = Themes.accents.map { Triple(it.key, it.name, Color(it.color)) },
+                    selected = store.accentKey,
+                ) { store.changeAccent(it); browser.pushState() }
+            }
+            item {
+                SettingLabel("Comment thread lines")
+                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("rainbow" to "Rainbow", "accent" to "Accent", "off" to "Reddit's").forEach { (mode, label) ->
+                        FilterChip(
+                            selected = store.threadMode == mode,
+                            onClick = { store.changeThreadMode(mode); browser.pushState() },
+                            label = { Text(label) },
+                        )
+                    }
+                }
+            }
+            if (store.threadMode == "rainbow") {
+                item {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Themes.palettes.forEach { palette ->
+                            PaletteRow(palette, selected = store.paletteKey == palette.key) {
+                                store.changePalette(palette.key); browser.pushState()
+                            }
+                        }
+                    }
                 }
             }
             item {
-                ToggleRow("Hide Reddit's header", "Use the app's top bar instead", store.hideHeader) {
+                var zoom by remember(store.textZoom) { mutableStateOf(store.textZoom.toFloat()) }
+                SettingLabel("Text size  ·  ${zoom.toInt()}%")
+                Slider(
+                    value = zoom,
+                    onValueChange = { zoom = it },
+                    onValueChangeFinished = { store.changeTextZoom(zoom.toInt()); browser.pushState() },
+                    valueRange = 80f..150f,
+                    steps = 6,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+            item {
+                ToggleRow("Hide Reddit's header and tabs", "Use the app's top bar and tab row instead", store.hideHeader) {
                     store.changeHideHeader(it); browser.pushState()
                 }
             }
@@ -649,10 +733,55 @@ private fun MeScreen(store: Store, browser: Browser, open: (String) -> Unit) {
                 }
             }
 
+            item { SectionHeader("Swipe actions · posts") }
+            SwipeActions.defaults.keys.filter { it.startsWith("post.") }.forEach { slot ->
+                item(key = slot) {
+                    SwipeSlotRow(slot, store.swipes[slot] ?: "none", SwipeActions.forPosts) {
+                        store.changeSwipe(slot, it); browser.pushState()
+                    }
+                }
+            }
+            item { SectionHeader("Swipe actions · comments") }
+            SwipeActions.defaults.keys.filter { it.startsWith("comment.") }.forEach { slot ->
+                item(key = slot) {
+                    SwipeSlotRow(slot, store.swipes[slot] ?: "none", SwipeActions.forComments) {
+                        store.changeSwipe(slot, it); browser.pushState()
+                    }
+                }
+            }
+            item {
+                Text(
+                    "You'll feel a tick when a swipe crosses into each action.",
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+
+            item { SectionHeader("News tab") }
+            item {
+                var news by remember(store.newsSubs) { mutableStateOf(store.newsSubs.replace("+", " ")) }
+                val save: () -> Unit = {
+                    if (store.changeNewsSubs(news)) browser.onSnack("News tab updated", null)
+                    else browser.onSnack("Add at least one subreddit name", null)
+                }
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    OutlinedTextField(
+                        value = news,
+                        onValueChange = { news = it },
+                        label = { Text("Subreddits, separated by spaces") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { save() }),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    TextButton(onClick = save) { Text("Save") }
+                }
+            }
+
             item { SectionHeader("Hidden posts") }
             item {
                 ListItem(
-                    colors = ListItemDefaults.colors(containerColor = Color.Black),
+                    colors = ListItemDefaults.colors(containerColor = Bg),
                     headlineContent = { Text("${store.hiddenCount} hidden") },
                     supportingContent = { Text("Posts you swiped away", color = Muted) },
                     trailingContent = {
@@ -663,23 +792,9 @@ private fun MeScreen(store: Store, browser: Browser, open: (String) -> Unit) {
                     },
                 )
             }
-
-            item { SectionHeader("Swipes") }
-            item {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    GestureLine("Posts", "→ upvote · → → downvote · ← bookmark · ← ← hide")
-                    GestureLine("Comments", "→ upvote · → → downvote · ← collapse · ← ← bookmark")
-                    Text(
-                        "One arrow is a short swipe, two is a long swipe. You'll feel a tick when you cross into each.",
-                        color = Muted,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-            }
             item {
                 Text(
-                    "Reddnot 0.1 · a custom shell for reddit.com",
+                    "Reddnot 0.2 · a custom shell for reddit.com",
                     color = Muted,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(16.dp),
@@ -706,7 +821,7 @@ private fun MeScreen(store: Store, browser: Browser, open: (String) -> Unit) {
 private fun LinkRow(title: String, onClick: () -> Unit) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
-        colors = ListItemDefaults.colors(containerColor = Color.Black),
+        colors = ListItemDefaults.colors(containerColor = Bg),
         headlineContent = { Text(title) },
     )
 }
@@ -715,7 +830,7 @@ private fun LinkRow(title: String, onClick: () -> Unit) {
 private fun ToggleRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
     ListItem(
         modifier = Modifier.clickable { onChange(!checked) },
-        colors = ListItemDefaults.colors(containerColor = Color.Black),
+        colors = ListItemDefaults.colors(containerColor = Bg),
         headlineContent = { Text(title) },
         supportingContent = if (subtitle != null) { { Text(subtitle, color = Muted) } } else null,
         trailingContent = { Switch(checked = checked, onCheckedChange = onChange) },
@@ -723,10 +838,89 @@ private fun ToggleRow(title: String, subtitle: String?, checked: Boolean, onChan
 }
 
 @Composable
-private fun GestureLine(what: String, how: String) {
-    Row(Modifier.padding(vertical = 4.dp)) {
-        Text(what, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(96.dp))
-        Text(how, color = Color(0xFFD0D0D6))
+private fun SettingLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+    )
+}
+
+/** A scrolling row of color circles with names. */
+@Composable
+private fun SwatchRow(
+    items: List<Triple<String, String, Color>>,
+    selected: String,
+    ring: Boolean = false,
+    onPick: (String) -> Unit,
+) {
+    Row(
+        Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        items.forEach { (key, name, color) ->
+            val on = key == selected
+            Column(
+                Modifier.width(72.dp).clip(RoundedCornerShape(12.dp)).clickable { onPick(key) }.padding(vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    Modifier.size(40.dp)
+                        .border(if (on) 3.dp else if (ring) 1.dp else 0.dp, if (on) Accent else Color(0xFF3A3A40), CircleShape)
+                        .padding(if (on) 5.dp else 0.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (on) Color.White else Muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaletteRow(palette: Palette, selected: Boolean, onPick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(if (selected) Card else Color.Transparent)
+            .clickable(onClick = onPick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(palette.name, modifier = Modifier.width(80.dp), color = if (selected) Color.White else Muted)
+        palette.colors.forEach { c ->
+            Box(Modifier.padding(end = 6.dp).width(4.dp).height(22.dp).clip(RoundedCornerShape(2.dp)).background(Color(c)))
+        }
+    }
+}
+
+/** One swipe slot with a menu of actions. */
+@Composable
+private fun SwipeSlotRow(slot: String, current: String, options: List<String>, onPick: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ListItem(
+            modifier = Modifier.clickable { open = true },
+            colors = ListItemDefaults.colors(containerColor = Bg),
+            headlineContent = { Text(SwipeActions.slotName(slot)) },
+            trailingContent = {
+                Text(SwipeActions.names[current] ?: current, color = if (current == "none") Muted else Accent)
+            },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { id ->
+                DropdownMenuItem(
+                    text = { Text(SwipeActions.names[id] ?: id) },
+                    onClick = { open = false; onPick(id) },
+                )
+            }
+        }
     }
 }
 

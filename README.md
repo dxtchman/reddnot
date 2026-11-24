@@ -4,22 +4,24 @@ A custom Reddit reader for Android, in the spirit of Apollo. Reddit closed its A
 
 ## Swipes
 
+Defaults (change any of them in **Me → Swipe actions**):
+
 | | Short swipe → | Long swipe → → | Short swipe ← | Long swipe ← ← |
 |---|---|---|---|---|
 | **Posts** | Upvote | Downvote | Bookmark | Hide |
 | **Comments** | Upvote | Downvote | Collapse | Bookmark |
 
-You feel a tick as you cross into each action. Swiping something you already bookmarked removes the bookmark. Bookmarks, hides and removals all have **Undo**.
+Other actions you can assign: reply, share, or nothing. You feel a tick as you cross into each action. Swiping something you already bookmarked removes the bookmark. Bookmarks, hides and removals all have **Undo**.
 
 ## What's in it
 
-- **Feed**: reddit.com with true black, no Reddit header, no promoted posts and no "open in app" nags. Pull to refresh; tap the title to jump to the top. The top bar has sort, search, share and a bookmark button on posts.
+- **Feed**: a For You · Following · News tab row on the home page (News is a feed of news subreddits you choose in Me). Rainbow comment threads like Apollo. Reddit with your theme, no Reddit header, no promoted posts and no "open in app" nags. Pull to refresh; tap the title to jump to the top. The top bar has sort, search, share and a bookmark button on posts.
 - **Subreddits**: Home, Popular and All, plus your own shortcuts (add from the box, or from ⋮ while viewing a sub). Swipe a shortcut to remove it.
 - **Bookmarks**: posts and comments, saved on the phone and searchable. Swipe left to delete, right to share.
-- **Me**: profile, notifications, messages, log in/out, look settings and hidden posts.
+- **Me**: profile, notifications, messages, log in/out, and customization: background theme (True black, Midnight, Charcoal, Grape, Forest, Reddit dark), accent color, thread-line colors (Rainbow with 4 palettes, Accent, or Reddit's), text size, swipe actions and the News tab's subreddits.
 - Fullscreen video, image uploads, and links to other sites open in your browser.
 
-Log in with your Reddit username and password (or email code). Google/Apple sign-in pop-ups don't work inside apps like this.
+Log in with your Reddit username and password (or email code). Google and Apple sign-in are removed because they can't work inside apps like this.
 
 To open Reddit links from other apps in Reddnot: Android Settings → Apps → Reddnot → Open by default → add the links.
 

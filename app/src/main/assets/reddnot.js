@@ -1,36 +1,42 @@
 /*
  * Reddnot page script. Runs at the start of every reddit.com page.
- * - Adds the Reddnot look (CSS from reddnot.css, passed in as window.__RN_CSS)
- * - Apollo-style swipe actions on posts and comments
+ * - Theme colors, rainbow threads (CSS from reddnot.css, passed in as window.__RN_CSS)
+ * - Apollo-style swipe actions on posts and comments (set in the app's Me tab)
  * - Marks bookmarked posts, removes hidden ones
+ * - Drives Reddit's For You / Following tabs from the app's own tab row
+ * - Removes Google and Apple sign-in buttons
  *
  * Talks to the app through window.reddnotBridge.postMessage(json).
- * The app talks back through window.reddnot.setState({...}).
+ * The app talks back through window.reddnot.setState({...}) and window.reddnot.feedTab(name).
  */
 (function () {
   'use strict';
   if (window.__reddnotLoaded) return;
   window.__reddnotLoaded = true;
 
-  // ---------- swipe actions (edit here to change what each swipe does) ----------
+  // ---------- swipe actions ----------
   var ICONS = {
     up: '<svg viewBox="0 0 24 24"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg>',
     down: '<svg viewBox="0 0 24 24"><path d="M12 20l8-8h-5V4H9v8H4z"/></svg>',
     save: '<svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>',
     hide: '<svg viewBox="0 0 24 24"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92A11.8 11.8 0 0 0 23 12c-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.8 11.8 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55A2.8 2.8 0 0 0 9 12a3 3 0 0 0 3 3c.22 0 .44-.03.65-.08l1.55 1.55A5 5 0 0 1 7 12c0-.79.2-1.53.53-2.2z"/></svg>',
-    collapse: '<svg viewBox="0 0 24 24"><path d="M7.4 15.4L12 10.8l4.6 4.6L18 14l-6-6-6 6z"/></svg>'
+    collapse: '<svg viewBox="0 0 24 24"><path d="M7.4 15.4L12 10.8l4.6 4.6L18 14l-6-6-6 6z"/></svg>',
+    reply: '<svg viewBox="0 0 24 24"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>',
+    share: '<svg viewBox="0 0 24 24"><path d="M18 16.1c-.8 0-1.4.3-2 .8l-7.1-4.2c.1-.2.1-.5.1-.7s0-.5-.1-.7L16 7.2c.5.5 1.2.8 2 .8 1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3c0 .2 0 .5.1.7L8 9.8C7.5 9.3 6.8 9 6 9c-1.7 0-3 1.3-3 3s1.3 3 3 3c.8 0 1.5-.3 2-.8l7.1 4.2c-.1.2-.1.4-.1.6 0 1.6 1.3 2.9 2.9 2.9s2.9-1.3 2.9-2.9-1.2-2.9-2.8-2.9z"/></svg>'
   };
   var A = {
     up: { id: 'up', label: 'Upvote', color: '#ff6a1a' },
     down: { id: 'down', label: 'Downvote', color: '#6a8cff' },
     save: { id: 'save', label: 'Bookmark', color: '#34c759' },
     hide: { id: 'hide', label: 'Hide', color: '#8e8e93' },
-    collapse: { id: 'collapse', label: 'Collapse', color: '#5e5ce6' }
+    collapse: { id: 'collapse', label: 'Collapse', color: '#5e5ce6' },
+    reply: { id: 'reply', label: 'Reply', color: '#0a84ff' },
+    share: { id: 'share', label: 'Share', color: '#bf5af2' }
   };
-  // [short swipe, long swipe] for each direction. "right" means the finger moves right.
-  var ACTIONS = {
-    post: { right: [A.up, A.down], left: [A.save, A.hide] },
-    comment: { right: [A.up, A.down], left: [A.collapse, A.save] }
+  // Defaults; the app sends the user's choices in settings.swipes.
+  var DEFAULT_SWIPES = {
+    post: { right: ['up', 'down'], left: ['save', 'hide'] },
+    comment: { right: ['up', 'down'], left: ['collapse', 'save'] }
   };
   var SHORT = 0.2;  // fraction of screen width for a short swipe
   var LONG = 0.48;  // fraction of screen width for a long swipe
@@ -40,7 +46,7 @@
   var state = {
     saved: {},
     hidden: {},
-    settings: { black: true, noHeader: true, noAds: true }
+    settings: { noHeader: true, noAds: true, rainbow: true, theme: null, threads: [], swipes: DEFAULT_SWIPES }
   };
 
   function send(msg) {
@@ -58,9 +64,17 @@
   function applySettings() {
     var html = document.documentElement;
     if (!html) return;
-    html.classList.toggle('rn-black', !!state.settings.black);
-    html.classList.toggle('rn-noheader', !!state.settings.noHeader);
-    html.classList.toggle('rn-noads', !!state.settings.noAds);
+    var st = state.settings;
+    html.classList.toggle('rn-noheader', !!st.noHeader);
+    html.classList.toggle('rn-noads', !!st.noAds);
+    html.classList.toggle('rn-rainbow', !!st.rainbow);
+    html.classList.toggle('rn-theme', !!st.theme);
+    if (st.theme) {
+      html.style.setProperty('--rn-bg', st.theme.bg);
+      html.style.setProperty('--rn-bg2', st.theme.bg2);
+      html.style.setProperty('--rn-bg3', st.theme.bg3);
+    }
+    (st.threads || []).forEach(function (c, i) { html.style.setProperty('--rn-t' + i, c); });
   }
 
   // ---------- CSS ----------
@@ -72,8 +86,25 @@
     (document.head || document.documentElement).appendChild(s);
   }
 
+  // Reddit draws its gray thread lines inside each comment's shadow DOM. This hides them
+  // when rainbow threads are on (the variable comes from <html>).
+  var SHADOW_CSS =
+    '[class*="threadline"],[class*="thread-line"],[data-testid*="threadline"],' +
+    '[data-testid*="thread-line"],[data-testid*="branch-line"],[class*="branch-line"]' +
+    '{opacity:var(--rn-native-lines,1)!important}';
+
+  function styleShadow(el) {
+    var root = el.shadowRoot;
+    if (!root || root.__rnStyled) return;
+    root.__rnStyled = true;
+    var s = document.createElement('style');
+    s.textContent = SHADOW_CSS;
+    root.appendChild(s);
+  }
+
   // ---------- reading posts and comments ----------
-  function attr(el, name) { return (el && el.getAttribute(name)) || ''; }
+  function attr(el, name) { return (el && el.getAttribute && el.getAttribute(name)) || ''; }
+  function text(el) { return ((el && el.textContent) || '').replace(/\s+/g, ' ').trim(); }
 
   function absUrl(path) {
     if (!path) return location.href;
@@ -92,7 +123,7 @@
     return {
       id: postId(el),
       kind: 'post',
-      title: attr(el, 'post-title') || (el.querySelector('[slot="title"]') || {}).textContent || 'Post',
+      title: attr(el, 'post-title') || text(el.querySelector('[slot="title"]')) || 'Post',
       subreddit: attr(el, 'subreddit-prefixed-name'),
       author: attr(el, 'author'),
       url: absUrl(attr(el, 'permalink')),
@@ -105,7 +136,7 @@
 
   function commentData(el) {
     var body = el.querySelector(':scope > [slot="comment"]') || el.querySelector('[slot="comment"]');
-    var text = body ? body.innerText.trim().replace(/\s+/g, ' ') : '';
+    var t = body ? body.innerText.trim().replace(/\s+/g, ' ') : '';
     var post = pagePost();
     return {
       id: commentId(el),
@@ -115,19 +146,20 @@
       author: attr(el, 'author'),
       url: absUrl(attr(el, 'permalink')),
       thumb: '',
-      snippet: text.slice(0, 400)
+      snippet: t.slice(0, 400)
     };
   }
 
   function idOf(el) { return el.tagName === 'SHREDDIT-POST' ? postId(el) : commentId(el); }
 
-  // Walks an element and its shadow roots. Skips nested comments so a comment
-  // never acts on one of its replies.
-  function deepFind(root, test) {
+  // Walks an element and its shadow roots, depth first. skip(n) stops it going into n.
+  function deepFind(root, test, skip) {
     var stack = [root];
+    var seen = 0;
     while (stack.length) {
       var n = stack.pop();
-      if (n !== root && n.tagName === 'SHREDDIT-COMMENT') continue;
+      if (++seen > 20000) return null;
+      if (n !== root && skip && skip(n)) continue;
       if (n.nodeType === 1 && test(n)) return n;
       if (n.shadowRoot) stack.push(n.shadowRoot);
       var kids = n.children || [];
@@ -136,21 +168,39 @@
     return null;
   }
 
-  function voteButton(el, dir) {
-    var re = dir === 'up' ? /upvote/i : /downvote/i;
-    var scope = el.tagName === 'SHREDDIT-COMMENT'
+  function deepAll(root, test, skip) {
+    var out = [];
+    deepFind(root, function (n) { if (test(n)) out.push(n); return false; }, skip);
+    return out;
+  }
+
+  function notNestedComment(n) { return n.tagName === 'SHREDDIT-COMMENT'; }
+
+  function actionScope(el) {
+    return el.tagName === 'SHREDDIT-COMMENT'
       ? (el.querySelector(':scope > shreddit-comment-action-row, :scope > [slot="actionRow"]') || el)
       : el;
-    return deepFind(scope, function (n) {
+  }
+
+  function voteButton(el, dir) {
+    var re = dir === 'up' ? /upvote/i : /downvote/i;
+    return deepFind(actionScope(el), function (n) {
       return n.tagName === 'BUTTON' &&
         (n.hasAttribute(dir === 'up' ? 'upvote' : 'downvote') || re.test(attr(n, 'aria-label')));
-    });
+    }, notNestedComment);
+  }
+
+  function replyButton(el) {
+    return deepFind(actionScope(el), function (n) {
+      return (n.tagName === 'BUTTON' || n.tagName === 'A') &&
+        (/^reply$/i.test(text(n)) || /^reply/i.test(attr(n, 'aria-label')));
+    }, notNestedComment);
   }
 
   function toggleCollapse(el) {
     var btn = deepFind(el, function (n) {
       return n.tagName === 'BUTTON' && /(collapse|expand|toggle)/i.test(attr(n, 'aria-label'));
-    });
+    }, notNestedComment);
     if (btn) {
       btn.click();
     } else {
@@ -162,7 +212,7 @@
     if (top < 0) window.scrollBy(0, top - 8);
   }
 
-  // ---------- marks (bookmarked / hidden) ----------
+  // ---------- marks (bookmarked / hidden / thread styles) ----------
   function setFlag(el, name, on) {
     if (on && !el.hasAttribute(name)) el.setAttribute(name, '');
     else if (!on && el.hasAttribute(name)) el.removeAttribute(name);
@@ -170,23 +220,127 @@
 
   function markAll() {
     var nodes = document.querySelectorAll('shreddit-post, shreddit-comment');
+    var onPost = location.pathname.indexOf('/comments/') >= 0;
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
       var id = idOf(el);
       setFlag(el, 'data-rn-saved', !!state.saved[id]);
       if (el.tagName === 'SHREDDIT-POST') {
         var box = el.closest('article') || el;
-        setFlag(box, 'data-rn-hidden', !!state.hidden[id] && location.pathname.indexOf('/comments/') < 0);
+        setFlag(box, 'data-rn-hidden', !!state.hidden[id] && !onPost);
         if (el.hasAttribute('promoted') || attr(el, 'post-type') === 'promoted') setFlag(box, 'data-rn-ad', true);
+      } else {
+        styleShadow(el);
       }
     }
   }
 
-  var markQueued = false;
+  // ---------- Google / Apple sign-in ----------
+  var SSO_TEXT = /^(continue|sign in|log in|sign up) with (google|apple)$/i;
+
+  function authVisible() {
+    return /\/(login|register|account)/.test(location.pathname) ||
+      !!document.querySelector('auth-flow-modal, auth-flow-manager, shreddit-async-loader[bundlename*="auth"], faceplate-dialog[open]');
+  }
+
+  function removeSso() {
+    if (!authVisible()) return;
+    deepAll(document.documentElement, function (n) {
+      var tag = n.tagName;
+      if (tag === 'IFRAME') return /accounts\.google\.com|appleid\.apple\.com/.test(n.src || '');
+      if (/(GOOGLE|APPLE)/.test(tag)) return true;
+      if (tag === 'BUTTON' || tag === 'A' || attr(n, 'role') === 'button') return SSO_TEXT.test(text(n));
+      return false;
+    }, function (n) { return n.tagName === 'SHREDDIT-POST' || n.tagName === 'SHREDDIT-COMMENT'; })
+      .forEach(function (n) {
+        if (n.style.display !== 'none') n.style.setProperty('display', 'none', 'important');
+      });
+  }
+
+  // ---------- For You / Following ----------
+  var TAB_NAMES = { 'for you': 'foryou', 'following': 'following' };
+  var lastTab = null;
+  var pendingTab = null;
+  var pendingUntil = 0;
+
+  function isHomeFeed() {
+    return /^\/((best|hot|new|top|rising)\/?)?$/.test(location.pathname);
+  }
+
+  function findTabs() {
+    return deepAll(document.body || document.documentElement, function (n) {
+      var tag = n.tagName;
+      if (!(attr(n, 'role') === 'tab' || tag === 'BUTTON' || tag === 'A' || tag === 'LI' || /TAB/.test(tag))) return false;
+      return !!TAB_NAMES[text(n).toLowerCase()];
+    }, function (n) {
+      return n.tagName === 'SHREDDIT-POST' || n.tagName === 'SHREDDIT-COMMENT';
+    });
+  }
+
+  function isSelected(n) {
+    return attr(n, 'aria-selected') === 'true' || attr(n, 'aria-current') === 'page' ||
+      attr(n, 'aria-current') === 'true' || n.hasAttribute('selected') || n.hasAttribute('active') ||
+      /(^|\s)(selected|active|is-active)(\s|$)/.test(n.className || '');
+  }
+
+  function syncTabs() {
+    if (!isHomeFeed()) return;
+    var tabs = findTabs();
+    if (!tabs.length) return;
+
+    // Hide Reddit's own row; the app shows its own above the feed.
+    if (state.settings.noHeader) {
+      var row = tabs[0].closest('[role="tablist"]');
+      if (!row && tabs.length > 1) {
+        row = tabs[0].parentElement;
+        while (row && !row.contains(tabs[1])) row = row.parentElement;
+      }
+      // Only hide something that is clearly just the tab row, never part of the feed.
+      if (row && row !== document.body && row !== document.documentElement &&
+          !row.querySelector('shreddit-post, shreddit-feed, article') && text(row).length < 80) {
+        setFlag(row, 'data-rn-hidden', true);
+      }
+    }
+
+    if (pendingTab) {
+      var target = tabs.filter(function (n) { return TAB_NAMES[text(n).toLowerCase()] === pendingTab; })[0];
+      if (target) {
+        target.click();
+        lastTab = pendingTab;
+        send({ type: 'feedTab', tab: pendingTab });
+        pendingTab = null;
+        return;
+      }
+    }
+
+    var sel = tabs.filter(isSelected)[0];
+    var now = sel ? TAB_NAMES[text(sel).toLowerCase()] : null;
+    if (now && now !== lastTab) {
+      lastTab = now;
+      send({ type: 'feedTab', tab: now });
+    }
+  }
+
+  // ---------- batching work after page changes ----------
+  var queued = false;
+  var lastSlow = 0;
   function queueMark() {
-    if (markQueued) return;
-    markQueued = true;
-    requestAnimationFrame(function () { markQueued = false; markAll(); });
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(function () {
+      queued = false;
+      markAll();
+      var t = Date.now();
+      if (t - lastSlow > 600 || pendingTab) {
+        lastSlow = t;
+        syncTabs();
+        removeSso();
+      }
+      if (pendingTab && t > pendingUntil) {
+        pendingTab = null;
+        send({ type: 'toast', text: "Couldn't find Reddit's feed tabs. Are you logged in?" });
+      }
+    });
   }
 
   // ---------- swipe gesture ----------
@@ -206,7 +360,11 @@
     return false;
   }
 
-  function actionsFor(g) { return ACTIONS[g.kind][g.dx > 0 ? 'right' : 'left']; }
+  function actionsFor(g) {
+    var cfg = (state.settings.swipes || DEFAULT_SWIPES)[g.kind] || DEFAULT_SWIPES[g.kind];
+    var ids = cfg[g.dx > 0 ? 'right' : 'left'] || [];
+    return [A[ids[0]] || null, A[ids[1]] || null];
+  }
 
   function labelFor(action, el) {
     if (action.id === 'save' && state.saved[idOf(el)]) return 'Remove bookmark';
@@ -232,15 +390,18 @@
     var W = window.innerWidth;
     var dx = Math.max(-W * 0.9, Math.min(W * 0.9, g.dx));
     var abs = Math.abs(dx);
-    var level = abs >= W * LONG ? 2 : abs >= W * SHORT ? 1 : 0;
     var list = actionsFor(g);
+    var level = abs >= W * LONG ? 2 : abs >= W * SHORT ? 1 : 0;
+    // An empty long slot keeps the short action; an empty short slot needs a long swipe.
+    if (level === 2 && !list[1]) level = list[0] ? 1 : 0;
+    if (level === 1 && !list[0]) level = 0;
     var side = dx > 0 ? 'right' : 'left';
     if (level !== g.level || side !== g.side) {
       if (level > g.level && level > 0) send({ type: 'haptic', strong: level === 2 });
       g.level = level;
       g.side = side;
-      var shown = list[Math.max(level, 1) - 1];
-      strip.firstChild.innerHTML = ICONS[shown.id] + '<span>' + labelFor(shown, g.el) + '</span>';
+      var shown = level ? list[level - 1] : (list[0] || list[1]);
+      strip.firstChild.innerHTML = shown ? ICONS[shown.id] + '<span>' + labelFor(shown, g.el) + '</span>' : '';
     }
     g.el.style.transform = 'translateX(' + dx + 'px)';
 
@@ -257,7 +418,7 @@
 
   function finish() {
     var el = g.el;
-    var action = g.level ? actionsFor(g)[g.level - 1] : null;
+    var action = g.level > 0 ? actionsFor(g)[g.level - 1] : null;
     var s = strip;
     strip = null;
     document.documentElement.classList.remove('rn-swiping');
@@ -308,6 +469,7 @@
         break;
       }
       case 'hide': {
+        if (!isPost) break;
         state.hidden[id] = true;
         var box = el.closest('article') || el;
         box.setAttribute('data-rn-hidden', '');
@@ -316,8 +478,19 @@
         break;
       }
       case 'collapse':
-        toggleCollapse(el);
+        if (!isPost) toggleCollapse(el);
         break;
+      case 'reply': {
+        var r = isPost ? null : replyButton(el);
+        if (r) r.click();
+        else send({ type: 'toast', text: 'Could not find the reply button.' });
+        break;
+      }
+      case 'share': {
+        var d = isPost ? postData(el) : commentData(el);
+        send({ type: 'share', url: d.url, title: d.title });
+        break;
+      }
     }
   }
 
@@ -337,7 +510,7 @@
     g = {
       el: target,
       kind: target.tagName === 'SHREDDIT-POST' ? 'post' : 'comment',
-      x0: t.clientX, y0: t.clientY, dx: 0, level: -1, active: false
+      x0: t.clientX, y0: t.clientY, dx: 0, level: -1, side: null, active: false
     };
   }
 
@@ -372,11 +545,22 @@
       if (s.settings) state.settings = s.settings;
       applySettings();
       markAll();
+      syncTabs();
     },
     // The post on a comments page, for the top bar's bookmark button.
     currentPost: function () {
       var p = pagePost();
       return p && location.pathname.indexOf('/comments/') >= 0 ? postData(p) : null;
+    },
+    // Switch Reddit's home feed tab: 'foryou' or 'following'. Keeps trying while the page loads.
+    feedTab: function (name) {
+      pendingTab = name;
+      pendingUntil = Date.now() + 5000;
+      lastSlow = 0;
+      queueMark();
+      setTimeout(queueMark, 800);
+      setTimeout(queueMark, 2000);
+      setTimeout(queueMark, 5200);
     }
   };
 
@@ -385,6 +569,7 @@
     addStyle();
     applySettings();
     markAll();
+    queueMark();
   }
 
   document.addEventListener('touchstart', onStart, { passive: true, capture: true });

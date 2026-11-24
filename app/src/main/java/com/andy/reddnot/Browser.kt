@@ -16,6 +16,7 @@ import android.webkit.CookieManager
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -27,6 +28,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
 import kotlin.math.abs
 
 /**
@@ -49,6 +51,11 @@ class Browser(
         private set
     var progress by mutableIntStateOf(0)
         private set
+
+    /** Reddit's home feed tab, as the page reports it: "foryou", "following" or null. */
+    var homeTab by mutableStateOf<String?>(null)
+        private set
+    private var pendingTab: String? = null
 
     /** Fullscreen video view from the page, shown over the whole app. */
     var fullscreenView by mutableStateOf<View?>(null)
@@ -108,8 +115,6 @@ class Browser(
         }
     }.apply {
         addView(webView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        setColorSchemeColors(0xFF5B8CFF.toInt())
-        setProgressBackgroundColorSchemeColor(0xFF1C1C20.toInt())
         setOnRefreshListener { webView.reload() }
     }
 
@@ -128,7 +133,18 @@ class Browser(
             }
         }
 
+        applyNativeLook()
+
         webView.webViewClient = object : WebViewClient() {
+            // Google and Apple sign-in can't work inside an app, so their scripts never load.
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                val host = request.url.host ?: return null
+                val path = request.url.path.orEmpty()
+                val blocked = (host == "accounts.google.com" && path.startsWith("/gsi")) ||
+                    host == "appleid.cdn-apple.com" || host == "appleid.apple.com"
+                return if (blocked) WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0))) else null
+            }
+
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 if (!request.isForMainFrame) return false
                 val uri = request.url
@@ -247,9 +263,34 @@ class Browser(
         }
     }
 
+    /** Switches Reddit's home feed to "foryou" or "following". */
+    fun selectHomeTab(tab: String) {
+        homeTab = tab
+        if (Links.isHomeFeed(url)) {
+            runFeedTab(tab)
+        } else {
+            pendingTab = tab
+            load(HOME)
+        }
+    }
+
+    private fun runFeedTab(tab: String) {
+        webView.evaluateJavascript("window.reddnot && window.reddnot.feedTab('$tab')", null)
+    }
+
+    /** Theme colors and text size for the native parts around the page. */
+    private fun applyNativeLook() {
+        val bg = Themes.bg(store.bgKey)
+        webView.setBackgroundColor(bg.bg.toInt())
+        view.setColorSchemeColors(Themes.accent(store.accentKey).color.toInt())
+        view.setProgressBackgroundColorSchemeColor(bg.card.toInt())
+        if (webView.settings.textZoom != store.textZoom) webView.settings.textZoom = store.textZoom
+    }
+
     // ---------- talking to the page ----------
     /** Sends bookmarks, hidden posts and settings to the page script. */
     fun pushState() {
+        applyNativeLook()
         val state = JSONObject()
             .put("saved", store.bookmarkIds())
             .put("hidden", store.hiddenIds())
@@ -298,7 +339,19 @@ class Browser(
     private fun handleMessage(raw: String) {
         val msg = runCatching { JSONObject(raw) }.getOrNull() ?: return
         when (msg.optString("type")) {
-            "ready" -> pushState()
+            "ready" -> {
+                pushState()
+                pendingTab?.let { if (Links.isHomeFeed(url)) { runFeedTab(it); pendingTab = null } }
+            }
+
+            "feedTab" -> homeTab = msg.optString("tab").ifBlank { null }
+
+            "share" -> {
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_TEXT, msg.optString("url"))
+                    .putExtra(Intent.EXTRA_SUBJECT, msg.optString("title"))
+                context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
 
             "haptic" -> webView.performHapticFeedback(
                 if (msg.optBoolean("strong")) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.CLOCK_TICK

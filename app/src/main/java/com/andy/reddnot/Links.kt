@@ -29,7 +29,7 @@ object Links {
     fun path(url: String): String = Uri.parse(url).path ?: "/"
 
     fun subredditOf(url: String): String? =
-        Regex("^/r/([A-Za-z0-9_]+)").find(path(url))?.groupValues?.get(1)
+        Regex("^/r/([A-Za-z0-9_+]+)").find(path(url))?.groupValues?.get(1)
 
     fun isPost(url: String) = path(url).contains("/comments/")
 
@@ -40,8 +40,12 @@ object Links {
     fun isFeed(url: String): Boolean {
         val p = path(url).trimEnd('/')
         if (p.isEmpty()) return true
-        return Regex("^(/r/[A-Za-z0-9_]+)?(/(best|hot|new|top|rising|controversial))?$").matches(p)
+        return Regex("^(/r/[A-Za-z0-9_+]+)?(/(best|hot|new|top|rising|controversial))?$").matches(p)
     }
+
+    /** Reddit's home page, where its For You / Following tabs live. */
+    fun isHomeFeed(url: String): Boolean =
+        isReddit(Uri.parse(url)) && Regex("^/((best|hot|new|top|rising)/?)?$").matches(path(url))
 
     fun title(url: String, pageTitle: String): String {
         val p = path(url)

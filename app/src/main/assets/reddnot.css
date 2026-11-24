@@ -1,40 +1,42 @@
 /*
  * Reddnot look. Injected into every reddit.com page.
  * Reddit's site changes often; if something looks off after an update, this is the file to patch.
- * Theme switches are classes on <html>: rn-black, rn-noheader, rn-noads.
+ *
+ * Switches are classes on <html>: rn-theme, rn-noheader, rn-noads, rn-rainbow.
+ * Colors come from the app as variables on <html>:
+ *   --rn-bg, --rn-bg2, --rn-bg3   background, raised, more raised
+ *   --rn-t0 ... --rn-t7           thread colors by depth
  */
 
-/* True black. Reddit's colors are CSS variables, which also reach inside its shadow DOM. */
-html.rn-black {
-  --color-neutral-background: #000 !important;
-  --color-neutral-background-weak: #0c0c0e !important;
-  --color-neutral-background-medium: #141417 !important;
-  --color-neutral-background-strong: #1c1c20 !important;
-  --color-neutral-background-container: #000 !important;
-  --color-neutral-background-container-strong: #111114 !important;
-  --color-neutral-background-hover: #16161a !important;
-  --color-neutral-border-weak: #1f1f24 !important;
-  --shreddit-content-background: #000 !important;
-  --color-tone-7: #1f1f24 !important;
-  --color-tone-8: #111114 !important;
-  --color-background: #000 !important;
-  --rn-bg: #000;
+/* ---------- background theme ---------- */
+/* Reddit's colors are CSS variables, which also reach inside its shadow DOM. */
+html.rn-theme {
+  --color-neutral-background: var(--rn-bg) !important;
+  --color-neutral-background-weak: var(--rn-bg2) !important;
+  --color-neutral-background-medium: var(--rn-bg3) !important;
+  --color-neutral-background-strong: var(--rn-bg3) !important;
+  --color-neutral-background-container: var(--rn-bg) !important;
+  --color-neutral-background-container-strong: var(--rn-bg2) !important;
+  --color-neutral-background-hover: var(--rn-bg2) !important;
+  --color-neutral-border-weak: var(--rn-bg3) !important;
+  --shreddit-content-background: var(--rn-bg) !important;
+  --color-tone-7: var(--rn-bg3) !important;
+  --color-tone-8: var(--rn-bg2) !important;
+  --color-background: var(--rn-bg) !important;
 }
-html.rn-black,
-html.rn-black body,
-html.rn-black shreddit-app,
-html.rn-black #main-content,
-html.rn-black .main-container {
-  background: #000 !important;
+html.rn-theme,
+html.rn-theme body,
+html.rn-theme shreddit-app,
+html.rn-theme #main-content,
+html.rn-theme .main-container {
+  background: var(--rn-bg) !important;
 }
-
-/* Thin dividers between posts, like a native list */
-html.rn-black shreddit-feed hr,
-html.rn-black main hr {
-  border-color: #1c1c20 !important;
+html.rn-theme shreddit-feed hr,
+html.rn-theme main hr {
+  border-color: var(--rn-bg3) !important;
 }
 
-/* Reddit's own header (the app has its own top bar) */
+/* ---------- Reddit's own header (the app has its own top bar) ---------- */
 html.rn-noheader reddit-header-large,
 html.rn-noheader reddit-header-small,
 html.rn-noheader header.v2,
@@ -42,7 +44,7 @@ html.rn-noheader shreddit-app > header {
   display: none !important;
 }
 
-/* Promoted posts and ads */
+/* ---------- promoted posts and ads ---------- */
 html.rn-noads shreddit-ad-post,
 html.rn-noads shreddit-comments-page-ad,
 html.rn-noads shreddit-sidebar-ad,
@@ -53,7 +55,7 @@ html.rn-noads [data-rn-ad] {
   display: none !important;
 }
 
-/* "Open in the app" nags */
+/* ---------- "open in the app" nags ---------- */
 xpromo-app-selector,
 #xpromo-bottom-sheet,
 .xpromo-bottom-sheet,
@@ -64,18 +66,52 @@ shreddit-experience-tree {
   display: none !important;
 }
 
-/* Posts you hid with a swipe */
+/* ---------- Google and Apple sign-in (they can't work inside an app) ---------- */
+#credential_picker_container,
+#credential_picker_iframe,
+iframe[src*="accounts.google.com"],
+iframe[src*="appleid.apple.com"],
+[data-testid*="google"],
+[data-testid*="apple-login"],
+auth-flow-google-sso,
+auth-flow-apple-sso,
+[data-rn-sso] {
+  display: none !important;
+}
+
+/* ---------- hidden things ---------- */
 [data-rn-hidden] {
   display: none !important;
 }
 
-/* Bookmarked posts and comments get a green edge */
-shreddit-post[data-rn-saved],
+/* ---------- rainbow threads ----------
+ * Each reply gets a colored line down its left edge, colored by depth (like Apollo).
+ * The marks are box-shadows set per comment so nested comments don't inherit them. */
+shreddit-comment {
+  --rn-line: 0 0 transparent;
+  --rn-save: 0 0 transparent;
+  box-shadow: var(--rn-line), var(--rn-save) !important;
+}
+html.rn-rainbow { --rn-native-lines: 0; }
+html.rn-rainbow shreddit-comment:not([depth="0"]) { --rn-line: inset 2px 0 0 var(--rn-depth); }
+shreddit-comment[depth="1"], shreddit-comment[depth="9"]  { --rn-depth: var(--rn-t0); }
+shreddit-comment[depth="2"], shreddit-comment[depth="10"] { --rn-depth: var(--rn-t1); }
+shreddit-comment[depth="3"], shreddit-comment[depth="11"] { --rn-depth: var(--rn-t2); }
+shreddit-comment[depth="4"], shreddit-comment[depth="12"] { --rn-depth: var(--rn-t3); }
+shreddit-comment[depth="5"], shreddit-comment[depth="13"] { --rn-depth: var(--rn-t4); }
+shreddit-comment[depth="6"], shreddit-comment[depth="14"] { --rn-depth: var(--rn-t5); }
+shreddit-comment[depth="7"], shreddit-comment[depth="15"] { --rn-depth: var(--rn-t6); }
+shreddit-comment[depth="8"], shreddit-comment[depth="16"] { --rn-depth: var(--rn-t7); }
+
+/* ---------- bookmarked posts and comments get a green edge on the right ---------- */
+shreddit-post[data-rn-saved] {
+  box-shadow: inset -3px 0 0 #34c759 !important;
+}
 shreddit-comment[data-rn-saved] {
-  box-shadow: inset 3px 0 0 #34c759 !important;
+  --rn-save: inset -3px 0 0 #34c759;
 }
 
-/* Swipe feedback strip, drawn in the space a swiped item uncovers */
+/* ---------- swipe feedback strip, drawn in the space a swiped item uncovers ---------- */
 #rn-strip {
   position: fixed;
   z-index: 2147483000;
@@ -99,7 +135,6 @@ shreddit-comment[data-rn-saved] {
 }
 #rn-strip svg { width: 24px; height: 24px; fill: currentColor; }
 
-/* No text selection or tap flashes while swiping */
 html.rn-swiping, html.rn-swiping * {
   -webkit-user-select: none !important;
   user-select: none !important;

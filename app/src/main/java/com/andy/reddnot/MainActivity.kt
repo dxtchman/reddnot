@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
         browser.load(linkFrom(intent) ?: HOME)
 
         setContent {
-            AppTheme {
+            AppTheme(store) {
                 App(store, browser, ui, onFullscreen = ::setFullscreen)
             }
         }
@@ -106,28 +106,33 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-val Accent = Color(0xFF5B8CFF)
 val Upvote = Color(0xFFFF6A1A)
 val SaveGreen = Color(0xFF34C759)
 val Muted = Color(0xFF8E8E93)
-val Bar = Color(0xFF0A0A0C)
-val Card = Color(0xFF141417)
 
-private val Colors = darkColorScheme(
-    primary = Accent,
-    onPrimary = Color.White,
-    secondary = SaveGreen,
-    background = Color.Black,
-    surface = Color.Black,
-    surfaceVariant = Card,
-    surfaceContainer = Bar,
-    secondaryContainer = Color(0xFF1E2A4A),
-    onSecondaryContainer = Color.White,
-    outline = Color(0xFF2C2C30),
-    outlineVariant = Color(0xFF1F1F24),
-)
+// Theme colors, following the user's picks in Me.
+val Accent: Color @Composable get() = MaterialTheme.colorScheme.primary
+val Bar: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainer
+val Card: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant
+val Bg: Color @Composable get() = MaterialTheme.colorScheme.background
 
 @Composable
-fun AppTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = Colors, content = content)
+fun AppTheme(store: Store, content: @Composable () -> Unit) {
+    val bg = Themes.bg(store.bgKey)
+    val accent = Color(Themes.accent(store.accentKey).color)
+    val scheme = darkColorScheme(
+        primary = accent,
+        onPrimary = Color.White,
+        secondary = SaveGreen,
+        background = Color(bg.bg),
+        surface = Color(bg.bg),
+        surfaceVariant = Color(bg.card),
+        surfaceContainer = Color(bg.bar),
+        surfaceContainerHigh = Color(bg.card),
+        secondaryContainer = accent.copy(alpha = 0.25f),
+        onSecondaryContainer = Color.White,
+        outline = Color(0xFF3A3A40),
+        outlineVariant = Color(bg.card),
+    )
+    MaterialTheme(colorScheme = scheme, content = content)
 }
